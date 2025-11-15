@@ -12,7 +12,6 @@ public class TrinoIcebergStack : IAsyncDisposable
 {
     private readonly INetwork _network;
     private readonly IContainer _minioContainer;
-    private readonly IContainer _mcInitContainer;
     private readonly IContainer _nessieContainer;
     private readonly IContainer _trinoContainer;
 
@@ -28,7 +27,7 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithName($"trino-test-{Guid.NewGuid():N}")
             .Build();
 
-        // MinIO container
+        // MinIO container with mc client included for bucket initialization
         _minioContainer = new ContainerBuilder()
             .WithImage("minio/minio:latest")
             .WithName($"minio-{Guid.NewGuid():N}")
@@ -42,18 +41,6 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
                 .ForPort(9000)
                 .ForPath("/minio/health/live")))
-            .Build();
-
-        // MinIO client (mc) init container - creates bucket
-        _mcInitContainer = new ContainerBuilder()
-            .WithImage("minio/mc:latest")
-            .WithName($"mc-init-{Guid.NewGuid():N}")
-            .WithNetwork(_network)
-            .WithEntrypoint("/bin/sh", "-c")
-            .WithCommand(
-                "until (/usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin) do " +
-                "echo 'Waiting for MinIO...' && sleep 2; done && " +
-                "/usr/bin/mc mb -p local/warehouse || true")
             .Build();
 
         // Nessie catalog container
@@ -163,15 +150,17 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Start MinIO first
         await _minioContainer.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        // Initialize MinIO bucket (one-shot container, wait for completion)
-        await _mcInitContainer.StartAsync(cancellationToken).ConfigureAwait(false);
+        // Initialize MinIO bucket using exec instead of a separate container
+        // The MinIO container includes the mc client
+        var createBucketResult = await _minioContainer.ExecAsync(
+            new[] { "sh", "-c", "mc alias set local http://localhost:9000 minioadmin minioadmin && mc mb -p local/warehouse || true" },
+            cancellationToken).ConfigureAwait(false);
         
-        // Wait for mc-init to complete by checking its exit code
-        var exitCode = await _mcInitContainer.GetExitCodeAsync(cancellationToken).ConfigureAwait(false);
-        if (exitCode != 0)
+        if (createBucketResult.ExitCode != 0)
         {
-            var logs = await _mcInitContainer.GetLogsAsync(ct: cancellationToken).ConfigureAwait(false);
-            throw new InvalidOperationException($"MinIO bucket initialization failed with exit code {exitCode}. Logs: {logs.Stdout}{Environment.NewLine}{logs.Stderr}");
+            throw new InvalidOperationException(
+                $"MinIO bucket initialization failed with exit code {createBucketResult.ExitCode}. " +
+                $"Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}");
         }
 
         // Start Nessie
@@ -212,7 +201,6 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Continue cleanup even if individual disposals fail
         try { await _trinoContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
         try { await _nessieContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
-        try { await _mcInitContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
         try { await _minioContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
         try { await _network.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
     }

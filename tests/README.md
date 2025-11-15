@@ -24,10 +24,9 @@ C# Testcontainers implementation of the Trino + Nessie + MinIO stack for integra
 The `TrinoIcebergStack` class manages:
 
 1. **Network** - Dedicated Docker network for container communication
-2. **MinIO** - Object storage on ports 9000 (API) and 9001 (console)
-3. **mc-init** - One-shot container to create the `warehouse` bucket
-4. **Nessie** - Iceberg catalog on port 19120
-5. **Trino** - Query engine on port 8080 with catalog config mounted from `../trino/etc`
+2. **MinIO** - Object storage on ports 9000 (API) and 9001 (console), with bucket initialization via exec
+3. **Nessie** - Iceberg catalog on port 19120
+4. **Trino** - Query engine on port 8080 with hardcoded configuration
 
 ## Run Tests
 
@@ -124,8 +123,8 @@ Stops and removes all containers and the network in reverse order of startup.
 - All containers use dynamic port mapping for parallel test execution
 - **Trino config files are hardcoded in C#** - no external files, copying, or mounting required
 - Configuration is completely self-contained within the test code
+- **MinIO bucket initialization uses exec** - no separate mc-init container needed
 - Proper wait strategies ensure containers are ready before tests run
-- mc-init container completion is verified by exit code (no arbitrary delays)
 - Error messages include both stdout and stderr for better debugging
 - Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
 - Robust disposal continues cleanup even if individual containers fail
