@@ -13,15 +13,13 @@ Minimal local stack: Trino queries Iceberg tables via the Nessie catalog; table 
 ```bash
 # From this folder
 docker compose up -d --build
-
-# Open Trino UI
-xdg-open http://localhost:8080 || true
-
-# MinIO console (username/password: minioadmin/minioadmin)
-xdg-open http://localhost:9001 || true
 ```
 
 Wait until `nessie` logs show ready (serving on 19120). Nessie runs with in-memory storage for simplicity.
+
+Open UIs:
+- Trino UI: http://localhost:8080
+- MinIO console: http://localhost:9001 (minioadmin/minioadmin)
 
 ## Validate with SQL
 
@@ -30,6 +28,8 @@ Run the automated validation script:
 ```bash
 ./validate.sh
 ```
+
+Note (Windows): run `validate.sh` from Git Bash or WSL.
 
 Or use Trino CLI directly:
 
@@ -57,6 +57,33 @@ Non-interactive example:
 ```bash
 echo "SELECT * FROM iceberg.demo.numbers;" | docker exec -i trino trino
 ```
+
+## .NET Testcontainers (Integration Tests)
+
+Run tests from the repository root:
+
+```bash
+dotnet test TrinoIcebergTests.slnx
+```
+
+Or from the tests directory:
+
+```bash
+cd tests
+dotnet test
+```
+
+Targeted/verbose examples:
+
+```bash
+dotnet test --filter "FullyQualifiedName~CanCreateAndQueryIcebergTable"
+dotnet test --logger "console;verbosity=detailed"
+```
+
+Details:
+- Test stack lives in `tests/TrinoIcebergStack.cs` and mirrors the Compose services (dynamic ports, isolated network).
+- Trino config is embedded in code via `tests/TrinoConfigurationProvider.cs` and mapped into `/etc/trino/**`.
+- MinIO bucket `warehouse` is created via `mc` executed inside the MinIO container (no extra container).
 
 ## Notes / Troubleshooting
 - Nessie uses in-memory storage by default (data lost on restart). For persistence, switch to `NESSIE_VERSION_STORE_TYPE=JDBC` and add Postgres config.
