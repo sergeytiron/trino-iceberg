@@ -116,8 +116,8 @@ Stops and removes all containers and the network in reverse order of startup.
 ## Notes
 
 - All containers use dynamic port mapping for parallel test execution
-- Trino config files are **embedded into the container** (copied at runtime, not mounted)
-- Config directory can be specified via `TRINO_CONFIG_DIR` environment variable or auto-detected
+- **Trino config files are hardcoded in C#** - no external files, copying, or mounting required
+- Configuration is completely self-contained within the test code
 - Proper wait strategies ensure containers are ready before tests run
 - mc-init container completion is verified by exit code (no arbitrary delays)
 - Error messages include both stdout and stderr for better debugging
@@ -128,33 +128,19 @@ Stops and removes all containers and the network in reverse order of startup.
 
 ## Configuration
 
-### Trino Configuration Files
+### Trino Configuration
 
-The Trino container needs configuration files from `trino/etc/`. By default, the stack looks for this directory relative to the test binary location. You can override this using the `TRINO_CONFIG_DIR` environment variable:
+All Trino configuration is **hardcoded in the `TrinoIcebergStack` class** using C# string literals. No external configuration files, directories, or environment variables are needed. The configuration includes:
 
-```bash
-export TRINO_CONFIG_DIR=/absolute/path/to/trino/etc
-dotnet test
-```
+- `config.properties` - Trino coordinator settings
+- `node.properties` - Node identification and data directory
+- `log.properties` - Logging configuration
+- `jvm.config` - JVM settings for the Trino server
+- `catalog/iceberg.properties` - Iceberg connector with Nessie catalog and MinIO S3 settings
 
-**Expected directory structure:**
-```
-trino-iceberg/
-├── trino/etc/
-│   ├── config.properties
-│   ├── jvm.config
-│   ├── log.properties
-│   ├── node.properties
-│   └── catalog/
-│       └── iceberg.properties
-└── tests/
-    ├── TrinoIcebergStack.cs
-    └── ...
-```
+To modify configuration, edit the `GetTrinoConfigBytes()` method in `TrinoIcebergStack.cs`.
 
 ## Troubleshooting
-
-**Config not found**: Set the `TRINO_CONFIG_DIR` environment variable to the absolute path of your `trino/etc` directory, or ensure the directory exists at the default relative path.
 
 **Containers don't start**: Check Docker daemon is running and you have sufficient resources.
 

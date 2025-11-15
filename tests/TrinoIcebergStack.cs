@@ -70,56 +70,89 @@ public class TrinoIcebergStack : IAsyncDisposable
                 .ForPath("/api/v2/config")))
             .Build();
 
-        // Trino container with embedded configuration
-        // Configuration files are copied into the container instead of bind mounting
-        // This makes the tests more portable and eliminates path resolution issues
-        var trinoBuilder = new ContainerBuilder()
+        // Trino container with hardcoded configuration
+        // All config files are embedded as strings in C# code - no external files needed
+        _trinoContainer = new ContainerBuilder()
             .WithImage("trinodb/trino:478")
             .WithName($"trino-{Guid.NewGuid():N}")
             .WithNetwork(_network)
             .WithNetworkAliases("trino")
-            .WithPortBinding(8080, true);
-
-        // Try to find config directory using environment variable or relative path
-        var envTrinoConfigDir = Environment.GetEnvironmentVariable("TRINO_CONFIG_DIR");
-        string trinoConfigDir;
-        
-        if (!string.IsNullOrWhiteSpace(envTrinoConfigDir) && Directory.Exists(envTrinoConfigDir))
-        {
-            trinoConfigDir = envTrinoConfigDir;
-        }
-        else
-        {
-            // Navigate from bin/Debug/net10.0 back to tests folder, then to trino/etc
-            var baseDir = AppContext.BaseDirectory;
-            trinoConfigDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "trino", "etc"));
-        }
-        
-        if (!Directory.Exists(trinoConfigDir))
-        {
-            throw new DirectoryNotFoundException(
-                $"Trino config directory not found. Tried environment variable TRINO_CONFIG_DIR='{envTrinoConfigDir}', " +
-                $"and fallback path: {trinoConfigDir}. Set TRINO_CONFIG_DIR to the path containing Trino configuration files.");
-        }
-
-        // Copy all config files into the container instead of bind mounting
-        foreach (var file in Directory.GetFiles(trinoConfigDir, "*", SearchOption.AllDirectories))
-        {
-            var relativePath = Path.GetRelativePath(trinoConfigDir, file);
-            // Get the container directory path (parent directory of the target file)
-            var relativeDir = Path.GetDirectoryName(relativePath) ?? "";
-            var containerDir = string.IsNullOrEmpty(relativeDir) 
-                ? "/etc/trino" 
-                : $"/etc/trino/{relativeDir.Replace("\\", "/")}";
-            trinoBuilder = trinoBuilder.WithResourceMapping(file, containerDir);
-        }
-        
-        _trinoContainer = trinoBuilder
+            .WithPortBinding(8080, true)
+            .WithResourceMapping(GetTrinoConfigBytes("config.properties"), "/etc/trino/config.properties")
+            .WithResourceMapping(GetTrinoConfigBytes("node.properties"), "/etc/trino/node.properties")
+            .WithResourceMapping(GetTrinoConfigBytes("log.properties"), "/etc/trino/log.properties")
+            .WithResourceMapping(GetTrinoConfigBytes("jvm.config"), "/etc/trino/jvm.config")
+            .WithResourceMapping(GetTrinoConfigBytes("catalog/iceberg.properties"), "/etc/trino/catalog/iceberg.properties")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
                 .ForPort(8080)
                 .ForPath("/v1/info")
                 .ForStatusCode(System.Net.HttpStatusCode.OK)))
             .Build();
+    }
+
+    /// <summary>
+    /// Returns hardcoded Trino configuration files as byte arrays
+    /// </summary>
+    private static byte[] GetTrinoConfigBytes(string fileName)
+    {
+        var content = fileName switch
+        {
+            "config.properties" => """
+                coordinator=true
+                node-scheduler.include-coordinator=true
+                http-server.http.port=8080
+                query.max-memory=1GB
+                query.max-memory-per-node=512MB
+                discovery.uri=http://trino:8080
+                """,
+            
+            "node.properties" => """
+                node.environment=dev
+                node.id=trino-local
+                node.data-dir=/data/trino
+                """,
+            
+            "log.properties" => """
+                io.trino=INFO
+                """,
+            
+            "jvm.config" => """
+                -server
+                -Xms512M
+                -Xmx1G
+                -XX:+UseG1GC
+                -XX:G1HeapRegionSize=32M
+                -XX:+ExplicitGCInvokesConcurrent
+                -XX:+HeapDumpOnOutOfMemoryError
+                -XX:+ExitOnOutOfMemoryError
+                -Djdk.attach.allowAttachSelf=true
+                -Djava.util.logging.config.file=/etc/trino/log.properties
+                """,
+            
+            "catalog/iceberg.properties" => """
+                connector.name=iceberg
+                
+                # Use Nessie catalog
+                iceberg.catalog.type=nessie
+                iceberg.nessie-catalog.uri=http://nessie:19120/api/v2
+                iceberg.nessie-catalog.default-warehouse-dir=s3://warehouse/
+                
+                # Use native S3 for MinIO
+                fs.native-s3.enabled=true
+                s3.endpoint=http://minio:9000
+                s3.path-style-access=true
+                s3.region=us-east-1
+                s3.aws-access-key=minioadmin
+                s3.aws-secret-key=minioadmin
+                
+                # Optional Iceberg defaults
+                iceberg.file-format=PARQUET
+                """,
+            
+            _ => throw new ArgumentException($"Unknown config file: {fileName}")
+        };
+        
+        return System.Text.Encoding.UTF8.GetBytes(content);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
