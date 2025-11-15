@@ -71,7 +71,14 @@ public class TrinoIcebergStack : IAsyncDisposable
             .Build();
 
         // Trino container with catalog configuration
-        var trinoConfigDir = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "trino", "etc");
+        // Navigate from bin/Debug/net10.0 back to tests folder, then to trino/etc
+        var baseDir = AppContext.BaseDirectory;
+        var trinoConfigDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "trino", "etc"));
+        
+        if (!Directory.Exists(trinoConfigDir))
+        {
+            throw new DirectoryNotFoundException($"Trino config directory not found at: {trinoConfigDir}. Base directory: {baseDir}");
+        }
         
         _trinoContainer = new ContainerBuilder()
             .WithImage("trinodb/trino:478")
@@ -98,8 +105,13 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Initialize MinIO bucket (one-shot container, wait for completion)
         await _mcInitContainer.StartAsync(cancellationToken).ConfigureAwait(false);
         
-        // Give mc-init time to create the bucket
-        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+        // Wait for mc-init to complete by checking its exit code
+        var exitCode = await _mcInitContainer.GetExitCodeAsync(cancellationToken).ConfigureAwait(false);
+        if (exitCode != 0)
+        {
+            var logs = await _mcInitContainer.GetLogsAsync(ct: cancellationToken).ConfigureAwait(false);
+            throw new InvalidOperationException($"MinIO bucket initialization failed with exit code {exitCode}. Logs: {logs.Stdout}");
+        }
 
         // Start Nessie
         await _nessieContainer.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -107,22 +119,35 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Start Trino last
         await _trinoContainer.StartAsync(cancellationToken).ConfigureAwait(false);
         
-        // Give Trino additional time to fully initialize (health check only means server is responding)
+        // Trino's HTTP endpoint responds before the server is fully initialized
+        // Wait for Trino to complete internal initialization
         await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> ExecuteTrinoQueryAsync(string sql, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
+        }
+
         var execResult = await _trinoContainer.ExecAsync(
             new[] { "trino", "--execute", sql },
             cancellationToken).ConfigureAwait(false);
 
-        // Return combined output (Trino writes to both stdout and stderr)
-        return execResult.Stdout + execResult.Stderr;
+        // Trino writes results to stdout and some messages to stderr
+        var output = execResult.Stdout;
+        if (!string.IsNullOrEmpty(execResult.Stderr))
+        {
+            output += Environment.NewLine + execResult.Stderr;
+        }
+
+        return output;
     }
 
     public async ValueTask DisposeAsync()
     {
+        // Dispose in reverse order of startup
         await _trinoContainer.DisposeAsync().ConfigureAwait(false);
         await _nessieContainer.DisposeAsync().ConfigureAwait(false);
         await _mcInitContainer.DisposeAsync().ConfigureAwait(false);

@@ -102,10 +102,10 @@ Starts all containers in dependency order:
 5. Trino
 
 ### `ExecuteTrinoQueryAsync(string sql)`
-Executes SQL via Trino CLI and returns stdout.
+Executes SQL via Trino CLI and returns output (stdout and stderr combined).
 
 ### `DisposeAsync()`
-Stops and removes all containers and the network.
+Stops and removes all containers and the network in reverse order of startup.
 
 ### Endpoint Properties
 - `TrinoEndpoint` - http://localhost:{mapped-port}
@@ -116,10 +116,12 @@ Stops and removes all containers and the network.
 ## Notes
 
 - All containers use dynamic port mapping for parallel test execution
-- Trino config is mounted from `../trino/etc` (same as docker-compose)
-- Wait strategies ensure containers are ready before tests run
-- Containers auto-cleanup after tests via `IAsyncDisposable`
+- Trino config is mounted from `../trino/etc` (verified at runtime)
+- Proper wait strategies ensure containers are ready before tests run
+- mc-init container completion is verified by exit code (no arbitrary delays)
+- Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
 - Network isolation prevents conflicts between test runs
+- Input validation on ExecuteTrinoQueryAsync prevents empty SQL queries
 
 ## Troubleshooting
 
