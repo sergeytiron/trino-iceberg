@@ -24,16 +24,21 @@ C# Testcontainers implementation of the Trino + Nessie + MinIO stack for integra
 The `TrinoIcebergStack` class manages:
 
 1. **Network** - Dedicated Docker network for container communication
-2. **MinIO** - Object storage on ports 9000 (API) and 9001 (console)
-3. **mc-init** - One-shot container to create the `warehouse` bucket
-4. **Nessie** - Iceberg catalog on port 19120
-5. **Trino** - Query engine on port 8080 with catalog config mounted from `../trino/etc`
+2. **MinIO** - Object storage on ports 9000 (API) and 9001 (console), with bucket initialization via exec
+3. **Nessie** - Iceberg catalog on port 19120
+4. **Trino** - Query engine on port 8080 with hardcoded configuration
 
 ## Run Tests
 
+From the repository root:
+```bash
+dotnet test TrinoIcebergTests.slnx
+```
+
+Or from the tests directory:
 ```bash
 cd tests
-dotnet.exe test
+dotnet test
 ```
 
 ## Run Specific Test
@@ -102,10 +107,10 @@ Starts all containers in dependency order:
 5. Trino
 
 ### `ExecuteTrinoQueryAsync(string sql)`
-Executes SQL via Trino CLI and returns stdout.
+Executes SQL via Trino CLI and returns output (stdout and stderr combined).
 
 ### `DisposeAsync()`
-Stops and removes all containers and the network.
+Stops and removes all containers and the network in reverse order of startup.
 
 ### Endpoint Properties
 - `TrinoEndpoint` - http://localhost:{mapped-port}
@@ -116,24 +121,31 @@ Stops and removes all containers and the network.
 ## Notes
 
 - All containers use dynamic port mapping for parallel test execution
-- Trino config is mounted from `../trino/etc` (same as docker-compose)
-- Wait strategies ensure containers are ready before tests run
-- Containers auto-cleanup after tests via `IAsyncDisposable`
+- **Trino config files are hardcoded in C#** - no external files, copying, or mounting required
+- Configuration is completely self-contained within the test code
+- **MinIO bucket initialization uses exec** - no separate mc-init container needed
+- Proper wait strategies ensure containers are ready before tests run
+- Error messages include both stdout and stderr for better debugging
+- Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
+- Robust disposal continues cleanup even if individual containers fail
 - Network isolation prevents conflicts between test runs
+- Input validation on ExecuteTrinoQueryAsync prevents empty SQL queries
+
+## Configuration
+
+### Trino Configuration
+
+All Trino configuration is **hardcoded in the `TrinoIcebergStack` class** using C# string literals. No external configuration files, directories, or environment variables are needed. The configuration includes:
+
+- `config.properties` - Trino coordinator settings
+- `node.properties` - Node identification and data directory
+- `log.properties` - Logging configuration
+- `jvm.config` - JVM settings for the Trino server
+- `catalog/iceberg.properties` - Iceberg connector with Nessie catalog and MinIO S3 settings
+
+To modify configuration, edit the `GetTrinoConfigBytes()` method in `TrinoIcebergStack.cs`.
 
 ## Troubleshooting
-
-**Config not found**: Ensure `trino/etc` directory exists relative to the test project:
-```
-trino-iceberg/
-├── trino/etc/
-│   ├── config.properties
-│   ├── catalog/iceberg.properties
-│   └── ...
-└── tests/
-    ├── TrinoIcebergStack.cs
-    └── ...
-```
 
 **Containers don't start**: Check Docker daemon is running and you have sufficient resources.
 

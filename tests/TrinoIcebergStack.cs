@@ -12,7 +12,6 @@ public class TrinoIcebergStack : IAsyncDisposable
 {
     private readonly INetwork _network;
     private readonly IContainer _minioContainer;
-    private readonly IContainer _mcInitContainer;
     private readonly IContainer _nessieContainer;
     private readonly IContainer _trinoContainer;
 
@@ -28,7 +27,7 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithName($"trino-test-{Guid.NewGuid():N}")
             .Build();
 
-        // MinIO container
+        // MinIO container with mc client included for bucket initialization
         _minioContainer = new ContainerBuilder()
             .WithImage("minio/minio:latest")
             .WithName($"minio-{Guid.NewGuid():N}")
@@ -42,18 +41,6 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
                 .ForPort(9000)
                 .ForPath("/minio/health/live")))
-            .Build();
-
-        // MinIO client (mc) init container - creates bucket
-        _mcInitContainer = new ContainerBuilder()
-            .WithImage("minio/mc:latest")
-            .WithName($"mc-init-{Guid.NewGuid():N}")
-            .WithNetwork(_network)
-            .WithEntrypoint("/bin/sh", "-c")
-            .WithCommand(
-                "until (/usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin) do " +
-                "echo 'Waiting for MinIO...' && sleep 2; done && " +
-                "/usr/bin/mc mb -p local/warehouse || true")
             .Build();
 
         // Nessie catalog container
@@ -70,21 +57,89 @@ public class TrinoIcebergStack : IAsyncDisposable
                 .ForPath("/api/v2/config")))
             .Build();
 
-        // Trino container with catalog configuration
-        var trinoConfigDir = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "trino", "etc");
-        
+        // Trino container with hardcoded configuration
+        // All config files are embedded as strings in C# code - no external files needed
         _trinoContainer = new ContainerBuilder()
             .WithImage("trinodb/trino:478")
             .WithName($"trino-{Guid.NewGuid():N}")
             .WithNetwork(_network)
             .WithNetworkAliases("trino")
             .WithPortBinding(8080, true)
-            .WithBindMount(trinoConfigDir, "/etc/trino", AccessMode.ReadOnly)
+            .WithResourceMapping(GetTrinoConfigBytes("config.properties"), "/etc/trino/config.properties")
+            .WithResourceMapping(GetTrinoConfigBytes("node.properties"), "/etc/trino/node.properties")
+            .WithResourceMapping(GetTrinoConfigBytes("log.properties"), "/etc/trino/log.properties")
+            .WithResourceMapping(GetTrinoConfigBytes("jvm.config"), "/etc/trino/jvm.config")
+            .WithResourceMapping(GetTrinoConfigBytes("catalog/iceberg.properties"), "/etc/trino/catalog/iceberg.properties")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
                 .ForPort(8080)
                 .ForPath("/v1/info")
                 .ForStatusCode(System.Net.HttpStatusCode.OK)))
             .Build();
+    }
+
+    /// <summary>
+    /// Returns hardcoded Trino configuration files as byte arrays
+    /// </summary>
+    private static byte[] GetTrinoConfigBytes(string fileName)
+    {
+        var content = fileName switch
+        {
+            "config.properties" => """
+                coordinator=true
+                node-scheduler.include-coordinator=true
+                http-server.http.port=8080
+                query.max-memory=1GB
+                query.max-memory-per-node=512MB
+                discovery.uri=http://trino:8080
+                """,
+            
+            "node.properties" => """
+                node.environment=dev
+                node.id=trino-local
+                node.data-dir=/data/trino
+                """,
+            
+            "log.properties" => """
+                io.trino=INFO
+                """,
+            
+            "jvm.config" => """
+                -server
+                -Xms512M
+                -Xmx1G
+                -XX:+UseG1GC
+                -XX:G1HeapRegionSize=32M
+                -XX:+ExplicitGCInvokesConcurrent
+                -XX:+HeapDumpOnOutOfMemoryError
+                -XX:+ExitOnOutOfMemoryError
+                -Djdk.attach.allowAttachSelf=true
+                -Djava.util.logging.config.file=/etc/trino/log.properties
+                """,
+            
+            "catalog/iceberg.properties" => """
+                connector.name=iceberg
+                
+                # Use Nessie catalog
+                iceberg.catalog.type=nessie
+                iceberg.nessie-catalog.uri=http://nessie:19120/api/v2
+                iceberg.nessie-catalog.default-warehouse-dir=s3://warehouse/
+                
+                # Use native S3 for MinIO
+                fs.native-s3.enabled=true
+                s3.endpoint=http://minio:9000
+                s3.path-style-access=true
+                s3.region=us-east-1
+                s3.aws-access-key=minioadmin
+                s3.aws-secret-key=minioadmin
+                
+                # Optional Iceberg defaults
+                iceberg.file-format=PARQUET
+                """,
+            
+            _ => throw new ArgumentException($"Unknown config file: {fileName}")
+        };
+        
+        return System.Text.Encoding.UTF8.GetBytes(content);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -95,11 +150,18 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Start MinIO first
         await _minioContainer.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        // Initialize MinIO bucket (one-shot container, wait for completion)
-        await _mcInitContainer.StartAsync(cancellationToken).ConfigureAwait(false);
+        // Initialize MinIO bucket using exec instead of a separate container
+        // The MinIO container includes the mc client
+        var createBucketResult = await _minioContainer.ExecAsync(
+            new[] { "sh", "-c", "mc alias set local http://localhost:9000 minioadmin minioadmin && mc mb -p local/warehouse || true" },
+            cancellationToken).ConfigureAwait(false);
         
-        // Give mc-init time to create the bucket
-        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+        if (createBucketResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"MinIO bucket initialization failed with exit code {createBucketResult.ExitCode}. " +
+                $"Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}");
+        }
 
         // Start Nessie
         await _nessieContainer.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -107,26 +169,39 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Start Trino last
         await _trinoContainer.StartAsync(cancellationToken).ConfigureAwait(false);
         
-        // Give Trino additional time to fully initialize (health check only means server is responding)
+        // Trino's HTTP endpoint responds before the server is fully initialized
+        // Wait for Trino to complete internal initialization
         await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> ExecuteTrinoQueryAsync(string sql, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
+        }
+
         var execResult = await _trinoContainer.ExecAsync(
             new[] { "trino", "--execute", sql },
             cancellationToken).ConfigureAwait(false);
 
-        // Return combined output (Trino writes to both stdout and stderr)
-        return execResult.Stdout + execResult.Stderr;
+        // Trino writes results to stdout and some messages to stderr
+        var output = execResult.Stdout;
+        if (!string.IsNullOrEmpty(execResult.Stderr))
+        {
+            output += Environment.NewLine + execResult.Stderr;
+        }
+
+        return output;
     }
 
     public async ValueTask DisposeAsync()
     {
-        await _trinoContainer.DisposeAsync().ConfigureAwait(false);
-        await _nessieContainer.DisposeAsync().ConfigureAwait(false);
-        await _mcInitContainer.DisposeAsync().ConfigureAwait(false);
-        await _minioContainer.DisposeAsync().ConfigureAwait(false);
-        await _network.DisposeAsync().ConfigureAwait(false);
+        // Dispose in reverse order of startup
+        // Continue cleanup even if individual disposals fail
+        try { await _trinoContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _nessieContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _minioContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _network.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
     }
 }
