@@ -116,27 +116,45 @@ Stops and removes all containers and the network in reverse order of startup.
 ## Notes
 
 - All containers use dynamic port mapping for parallel test execution
-- Trino config is mounted from `../trino/etc` (verified at runtime)
+- Trino config files are **embedded into the container** (copied at runtime, not mounted)
+- Config directory can be specified via `TRINO_CONFIG_DIR` environment variable or auto-detected
 - Proper wait strategies ensure containers are ready before tests run
 - mc-init container completion is verified by exit code (no arbitrary delays)
+- Error messages include both stdout and stderr for better debugging
 - Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
 - Robust disposal continues cleanup even if individual containers fail
 - Network isolation prevents conflicts between test runs
 - Input validation on ExecuteTrinoQueryAsync prevents empty SQL queries
 
-## Troubleshooting
+## Configuration
 
-**Config not found**: Ensure `trino/etc` directory exists relative to the test project:
+### Trino Configuration Files
+
+The Trino container needs configuration files from `trino/etc/`. By default, the stack looks for this directory relative to the test binary location. You can override this using the `TRINO_CONFIG_DIR` environment variable:
+
+```bash
+export TRINO_CONFIG_DIR=/absolute/path/to/trino/etc
+dotnet test
+```
+
+**Expected directory structure:**
 ```
 trino-iceberg/
 ├── trino/etc/
 │   ├── config.properties
-│   ├── catalog/iceberg.properties
-│   └── ...
+│   ├── jvm.config
+│   ├── log.properties
+│   ├── node.properties
+│   └── catalog/
+│       └── iceberg.properties
 └── tests/
     ├── TrinoIcebergStack.cs
     └── ...
 ```
+
+## Troubleshooting
+
+**Config not found**: Set the `TRINO_CONFIG_DIR` environment variable to the absolute path of your `trino/etc` directory, or ensure the directory exists at the default relative path.
 
 **Containers don't start**: Check Docker daemon is running and you have sufficient resources.
 

@@ -70,23 +70,51 @@ public class TrinoIcebergStack : IAsyncDisposable
                 .ForPath("/api/v2/config")))
             .Build();
 
-        // Trino container with catalog configuration
-        // Navigate from bin/Debug/net10.0 back to tests folder, then to trino/etc
-        var baseDir = AppContext.BaseDirectory;
-        var trinoConfigDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "trino", "etc"));
-        
-        if (!Directory.Exists(trinoConfigDir))
-        {
-            throw new DirectoryNotFoundException($"Trino config directory not found at: {trinoConfigDir}. Base directory: {baseDir}");
-        }
-        
-        _trinoContainer = new ContainerBuilder()
+        // Trino container with embedded configuration
+        // Configuration files are copied into the container instead of bind mounting
+        // This makes the tests more portable and eliminates path resolution issues
+        var trinoBuilder = new ContainerBuilder()
             .WithImage("trinodb/trino:478")
             .WithName($"trino-{Guid.NewGuid():N}")
             .WithNetwork(_network)
             .WithNetworkAliases("trino")
-            .WithPortBinding(8080, true)
-            .WithBindMount(trinoConfigDir, "/etc/trino", AccessMode.ReadOnly)
+            .WithPortBinding(8080, true);
+
+        // Try to find config directory using environment variable or relative path
+        var envTrinoConfigDir = Environment.GetEnvironmentVariable("TRINO_CONFIG_DIR");
+        string trinoConfigDir;
+        
+        if (!string.IsNullOrWhiteSpace(envTrinoConfigDir) && Directory.Exists(envTrinoConfigDir))
+        {
+            trinoConfigDir = envTrinoConfigDir;
+        }
+        else
+        {
+            // Navigate from bin/Debug/net10.0 back to tests folder, then to trino/etc
+            var baseDir = AppContext.BaseDirectory;
+            trinoConfigDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "trino", "etc"));
+        }
+        
+        if (!Directory.Exists(trinoConfigDir))
+        {
+            throw new DirectoryNotFoundException(
+                $"Trino config directory not found. Tried environment variable TRINO_CONFIG_DIR='{envTrinoConfigDir}', " +
+                $"and fallback path: {trinoConfigDir}. Set TRINO_CONFIG_DIR to the path containing Trino configuration files.");
+        }
+
+        // Copy all config files into the container instead of bind mounting
+        foreach (var file in Directory.GetFiles(trinoConfigDir, "*", SearchOption.AllDirectories))
+        {
+            var relativePath = Path.GetRelativePath(trinoConfigDir, file);
+            // Get the container directory path (parent directory of the target file)
+            var relativeDir = Path.GetDirectoryName(relativePath) ?? "";
+            var containerDir = string.IsNullOrEmpty(relativeDir) 
+                ? "/etc/trino" 
+                : $"/etc/trino/{relativeDir.Replace("\\", "/")}";
+            trinoBuilder = trinoBuilder.WithResourceMapping(file, containerDir);
+        }
+        
+        _trinoContainer = trinoBuilder
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
                 .ForPort(8080)
                 .ForPath("/v1/info")
@@ -110,7 +138,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         if (exitCode != 0)
         {
             var logs = await _mcInitContainer.GetLogsAsync(ct: cancellationToken).ConfigureAwait(false);
-            throw new InvalidOperationException($"MinIO bucket initialization failed with exit code {exitCode}. Logs: {logs.Stdout}");
+            throw new InvalidOperationException($"MinIO bucket initialization failed with exit code {exitCode}. Logs: {logs.Stdout}{Environment.NewLine}{logs.Stderr}");
         }
 
         // Start Nessie
