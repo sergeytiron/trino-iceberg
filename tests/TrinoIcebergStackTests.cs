@@ -23,12 +23,21 @@ public class TrinoIcebergStackTests
         _output.WriteLine($"MinIO Console: {Stack.MinioConsoleEndpoint}");
     }
 
+    /// <summary>
+    /// Generates a unique schema name for test isolation
+    /// </summary>
+    private static string GetUniqueSchemaName(string baseName) =>
+        $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
+
     [Fact]
     public async Task CanCreateSchemaInNessieCatalog()
     {
+        // Arrange
+        var schemaName = GetUniqueSchemaName("test_schema");
+
         // Act
         var result = await Stack.ExecuteTrinoQueryAsync(
-            "CREATE SCHEMA IF NOT EXISTS iceberg.test_schema WITH (location='s3://warehouse/test_schema/')");
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
 
         // Assert
         _output.WriteLine($"Result: {result}");
@@ -38,21 +47,24 @@ public class TrinoIcebergStackTests
     [Fact]
     public async Task CanCreateAndQueryIcebergTable()
     {
-        // Arrange - Create schema
+        // Arrange
+        var schemaName = GetUniqueSchemaName("demo");
+
+        // Create schema
         await Stack.ExecuteTrinoQueryAsync(
-            "CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
 
         // Act - Create table
         await Stack.ExecuteTrinoQueryAsync(
-            "CREATE TABLE IF NOT EXISTS iceberg.demo.test_numbers (id int, name varchar) WITH (format='PARQUET')");
+            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.test_numbers (id int, name varchar) WITH (format='PARQUET')");
 
         // Act - Insert data
         await Stack.ExecuteTrinoQueryAsync(
-            "INSERT INTO iceberg.demo.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')");
+            $"INSERT INTO iceberg.{schemaName}.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')");
 
         // Act - Query data
         var result = await Stack.ExecuteTrinoQueryAsync(
-            "SELECT * FROM iceberg.demo.test_numbers ORDER BY id");
+            $"SELECT * FROM iceberg.{schemaName}.test_numbers ORDER BY id");
 
         // Assert
         _output.WriteLine($"Query result:\n{result}");
@@ -68,24 +80,26 @@ public class TrinoIcebergStackTests
     public async Task CanExecuteMultipleQueries()
     {
         // Arrange
-        await Stack.ExecuteTrinoQueryAsync(
-            "CREATE SCHEMA IF NOT EXISTS iceberg.analytics WITH (location='s3://warehouse/analytics/')");
+        var schemaName = GetUniqueSchemaName("analytics");
 
         await Stack.ExecuteTrinoQueryAsync(
-            "CREATE TABLE IF NOT EXISTS iceberg.analytics.events (event_id bigint, event_type varchar, timestamp timestamp) WITH (format='PARQUET')");
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
+
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.events (event_id bigint, event_type varchar, timestamp timestamp) WITH (format='PARQUET')");
 
         // Act
         await Stack.ExecuteTrinoQueryAsync(
-            "INSERT INTO iceberg.analytics.events VALUES " +
+            $"INSERT INTO iceberg.{schemaName}.events VALUES " +
             "(1, 'click', TIMESTAMP '2025-11-15 10:00:00'), " +
             "(2, 'view', TIMESTAMP '2025-11-15 10:05:00'), " +
             "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')");
 
         var countResult = await Stack.ExecuteTrinoQueryAsync(
-            "SELECT COUNT(*) as total FROM iceberg.analytics.events");
+            $"SELECT COUNT(*) as total FROM iceberg.{schemaName}.events");
 
         var groupResult = await Stack.ExecuteTrinoQueryAsync(
-            "SELECT event_type, COUNT(*) as count FROM iceberg.analytics.events GROUP BY event_type ORDER BY event_type");
+            $"SELECT event_type, COUNT(*) as count FROM iceberg.{schemaName}.events GROUP BY event_type ORDER BY event_type");
 
         // Assert
         _output.WriteLine($"Count result: {countResult}");
