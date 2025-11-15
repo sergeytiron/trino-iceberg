@@ -120,6 +120,7 @@ Stops and removes all containers and the network in reverse order of startup.
 - Proper wait strategies ensure containers are ready before tests run
 - mc-init container completion is verified by exit code (no arbitrary delays)
 - Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
+- Robust disposal continues cleanup even if individual containers fail
 - Network isolation prevents conflicts between test runs
 - Input validation on ExecuteTrinoQueryAsync prevents empty SQL queries
 

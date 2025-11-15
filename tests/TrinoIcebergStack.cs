@@ -148,10 +148,11 @@ public class TrinoIcebergStack : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         // Dispose in reverse order of startup
-        await _trinoContainer.DisposeAsync().ConfigureAwait(false);
-        await _nessieContainer.DisposeAsync().ConfigureAwait(false);
-        await _mcInitContainer.DisposeAsync().ConfigureAwait(false);
-        await _minioContainer.DisposeAsync().ConfigureAwait(false);
-        await _network.DisposeAsync().ConfigureAwait(false);
+        // Continue cleanup even if individual disposals fail
+        try { await _trinoContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _nessieContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _mcInitContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _minioContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        try { await _network.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
     }
 }
