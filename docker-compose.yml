@@ -1,0 +1,53 @@
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address :9001
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  mc:
+    image: minio/mc:latest
+    container_name: mc-init
+    depends_on:
+      - minio
+    entrypoint: >-
+      sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin) do echo 'Waiting for MinIO...' && sleep 2; done &&
+      /usr/bin/mc mb -p local/warehouse || true &&
+      /usr/bin/mc ls local
+      "
+    restart: "no"
+
+  nessie:
+    image: ghcr.io/projectnessie/nessie:latest
+    container_name: nessie
+    environment:
+      # Use in-memory storage for simplicity (can switch to Postgres if needed)
+      QUARKUS_PROFILE: prod
+      NESSIE_VERSION_STORE_TYPE: IN_MEMORY
+    ports:
+      - "19120:19120"
+    depends_on:
+      - minio
+      - mc
+
+  trino:
+    image: trinodb/trino:478
+    container_name: trino
+    depends_on:
+      - nessie
+      - minio
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/etc:/etc/trino:ro
+
+volumes:
+  minio_data: {}
