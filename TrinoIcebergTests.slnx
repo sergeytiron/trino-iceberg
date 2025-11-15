@@ -1,0 +1,3 @@
+<Solution>
+  <Project Path="tests\TrinoIcebergTests.csproj" Type="Classic C#" />
+</Solution>

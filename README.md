@@ -69,3 +69,5 @@ echo "SELECT * FROM iceberg.demo.numbers;" | docker exec -i trino trino
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config
 - `trino/etc/catalog/iceberg.properties`: Iceberg catalog using Nessie + S3 (MinIO)
+- `tests/`: C# Testcontainers implementation with integration tests
+- `TrinoIcebergTests.slnx`: .NET solution file for the test project

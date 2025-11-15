@@ -31,9 +31,15 @@ The `TrinoIcebergStack` class manages:
 
 ## Run Tests
 
+From the repository root:
+```bash
+dotnet test TrinoIcebergTests.slnx
+```
+
+Or from the tests directory:
 ```bash
 cd tests
-dotnet.exe test
+dotnet test
 ```
 
 ## Run Specific Test
