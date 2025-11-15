@@ -1,5 +1,5 @@
-﻿using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Configurations;
+﻿using System.Net;
+using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 
@@ -17,17 +17,16 @@ public class TrinoIcebergStack : IAsyncDisposable
     private const string NessiePort = "19120";
     private const string TrinoPort = "8080";
     private const string WarehouseBucketName = "warehouse";
-    private const int TrinoInitializationDelaySeconds = 10;
 
     private readonly INetwork _network;
     private readonly IContainer _minioContainer;
     private readonly IContainer _nessieContainer;
     private readonly IContainer _trinoContainer;
 
-    public string MinioEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(9000)}";
-    public string MinioConsoleEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(9001)}";
-    public string NessieEndpoint => $"http://localhost:{_nessieContainer.GetMappedPublicPort(19120)}";
-    public string TrinoEndpoint => $"http://localhost:{_trinoContainer.GetMappedPublicPort(8080)}";
+    public string MinioEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(int.Parse(MinioS3Port))}";
+    public string MinioConsoleEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(int.Parse(MinioConsolePort))}";
+    public string NessieEndpoint => $"http://localhost:{_nessieContainer.GetMappedPublicPort(int.Parse(NessiePort))}";
+    public string TrinoEndpoint => $"http://localhost:{_trinoContainer.GetMappedPublicPort(int.Parse(TrinoPort))}";
 
     public TrinoIcebergStack()
     {
@@ -56,11 +55,11 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithNetworkAliases("minio")
             .WithEnvironment("MINIO_ROOT_USER", MinioRootUser)
             .WithEnvironment("MINIO_ROOT_PASSWORD", MinioRootPassword)
-            .WithCommand("server", "/data", "--console-address", ":9001")
-            .WithPortBinding(9000, true)
-            .WithPortBinding(9001, true)
+            .WithCommand("server", "/data", "--console-address", $":{MinioConsolePort}")
+            .WithPortBinding(int.Parse(MinioS3Port), true)
+            .WithPortBinding(int.Parse(MinioConsolePort), true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(9000)
+                .ForPort(ushort.Parse(MinioS3Port))
                 .ForPath("/minio/health/live")))
             .Build();
     }
@@ -74,9 +73,9 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithNetworkAliases("nessie")
             .WithEnvironment("QUARKUS_PROFILE", "prod")
             .WithEnvironment("NESSIE_VERSION_STORE_TYPE", "IN_MEMORY")
-            .WithPortBinding(19120, true)
+            .WithPortBinding(int.Parse(NessiePort), true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(19120)
+                .ForPort(ushort.Parse(NessiePort))
                 .ForPath("/api/v2/config")))
             .Build();
     }
@@ -88,16 +87,13 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithName($"trino-{Guid.NewGuid():N}")
             .WithNetwork(network)
             .WithNetworkAliases("trino")
-            .WithPortBinding(8080, true)
+            .WithPortBinding(int.Parse(TrinoPort), true)
             .WithResourceMapping(TrinoConfigurationProvider.GetConfigPropertiesBytes(), "/etc/trino/config.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetNodePropertiesBytes(), "/etc/trino/node.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetLogPropertiesBytes(), "/etc/trino/log.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetJvmConfigBytes(), "/etc/trino/jvm.config")
             .WithResourceMapping(TrinoConfigurationProvider.GetIcebergCatalogPropertiesBytes(), "/etc/trino/catalog/iceberg.properties")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(8080)
-                .ForPath("/v1/info")
-                .ForStatusCode(System.Net.HttpStatusCode.OK)))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("SERVER STARTED"))
             .Build();
     }
 
@@ -118,10 +114,6 @@ public class TrinoIcebergStack : IAsyncDisposable
 
         // Start Trino last
         await _trinoContainer.StartAsync(cancellationToken).ConfigureAwait(false);
-        
-        // Trino's HTTP endpoint responds before the server is fully initialized
-        // Wait for Trino to complete internal initialization
-        await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> ExecuteTrinoQueryAsync(string sql, CancellationToken cancellationToken = default)
@@ -157,7 +149,7 @@ public class TrinoIcebergStack : IAsyncDisposable
 
     private async Task InitializeMinIOBucketAsync(CancellationToken cancellationToken)
     {
-        var createBucketCommand = $"mc alias set local http://localhost:9000 {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
+        var createBucketCommand = $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
         
         var createBucketResult = await _minioContainer.ExecAsync(
             new[] { "sh", "-c", createBucketCommand },
