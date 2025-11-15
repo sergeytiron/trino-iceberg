@@ -5,41 +5,29 @@ namespace TrinoIcebergTests;
 /// <summary>
 /// Integration tests for the Trino + Nessie + MinIO stack
 /// </summary>
-public class TrinoIcebergStackTests : IAsyncLifetime
+[Collection("TrinoIcebergStack")]
+public class TrinoIcebergStackTests
 {
     private readonly ITestOutputHelper _output;
-    private TrinoIcebergStack? _stack;
+    private readonly TrinoIcebergStackFixture _fixture;
+    private TrinoIcebergStack Stack => _fixture.Stack;
 
-    public TrinoIcebergStackTests(ITestOutputHelper output)
+    public TrinoIcebergStackTests(ITestOutputHelper output, TrinoIcebergStackFixture fixture)
     {
         _output = output;
-    }
-
-    public async Task InitializeAsync()
-    {
-        _stack = new TrinoIcebergStack();
-        await _stack.StartAsync();
-        
-        _output.WriteLine($"Stack started successfully!");
-        _output.WriteLine($"Trino: {_stack.TrinoEndpoint}");
-        _output.WriteLine($"Nessie: {_stack.NessieEndpoint}");
-        _output.WriteLine($"MinIO API: {_stack.MinioEndpoint}");
-        _output.WriteLine($"MinIO Console: {_stack.MinioConsoleEndpoint}");
-    }
-
-    public async Task DisposeAsync()
-    {
-        if (_stack != null)
-        {
-            await _stack.DisposeAsync();
-        }
+        _fixture = fixture;
+        _output.WriteLine("Shared stack initialized.");
+        _output.WriteLine($"Trino: {Stack.TrinoEndpoint}");
+        _output.WriteLine($"Nessie: {Stack.NessieEndpoint}");
+        _output.WriteLine($"MinIO API: {Stack.MinioEndpoint}");
+        _output.WriteLine($"MinIO Console: {Stack.MinioConsoleEndpoint}");
     }
 
     [Fact]
     public async Task CanCreateSchemaInNessieCatalog()
     {
         // Act
-        var result = await _stack!.ExecuteTrinoQueryAsync(
+        var result = await Stack.ExecuteTrinoQueryAsync(
             "CREATE SCHEMA IF NOT EXISTS iceberg.test_schema WITH (location='s3://warehouse/test_schema/')");
 
         // Assert
@@ -51,19 +39,19 @@ public class TrinoIcebergStackTests : IAsyncLifetime
     public async Task CanCreateAndQueryIcebergTable()
     {
         // Arrange - Create schema
-        await _stack!.ExecuteTrinoQueryAsync(
+        await Stack.ExecuteTrinoQueryAsync(
             "CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
 
         // Act - Create table
-        await _stack.ExecuteTrinoQueryAsync(
+        await Stack.ExecuteTrinoQueryAsync(
             "CREATE TABLE IF NOT EXISTS iceberg.demo.test_numbers (id int, name varchar) WITH (format='PARQUET')");
 
         // Act - Insert data
-        await _stack.ExecuteTrinoQueryAsync(
+        await Stack.ExecuteTrinoQueryAsync(
             "INSERT INTO iceberg.demo.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')");
 
         // Act - Query data
-        var result = await _stack.ExecuteTrinoQueryAsync(
+        var result = await Stack.ExecuteTrinoQueryAsync(
             "SELECT * FROM iceberg.demo.test_numbers ORDER BY id");
 
         // Assert
@@ -80,29 +68,29 @@ public class TrinoIcebergStackTests : IAsyncLifetime
     public async Task CanExecuteMultipleQueries()
     {
         // Arrange
-        await _stack!.ExecuteTrinoQueryAsync(
+        await Stack.ExecuteTrinoQueryAsync(
             "CREATE SCHEMA IF NOT EXISTS iceberg.analytics WITH (location='s3://warehouse/analytics/')");
 
-        await _stack.ExecuteTrinoQueryAsync(
+        await Stack.ExecuteTrinoQueryAsync(
             "CREATE TABLE IF NOT EXISTS iceberg.analytics.events (event_id bigint, event_type varchar, timestamp timestamp) WITH (format='PARQUET')");
 
         // Act
-        await _stack.ExecuteTrinoQueryAsync(
+        await Stack.ExecuteTrinoQueryAsync(
             "INSERT INTO iceberg.analytics.events VALUES " +
             "(1, 'click', TIMESTAMP '2025-11-15 10:00:00'), " +
             "(2, 'view', TIMESTAMP '2025-11-15 10:05:00'), " +
             "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')");
 
-        var countResult = await _stack.ExecuteTrinoQueryAsync(
+        var countResult = await Stack.ExecuteTrinoQueryAsync(
             "SELECT COUNT(*) as total FROM iceberg.analytics.events");
 
-        var groupResult = await _stack.ExecuteTrinoQueryAsync(
+        var groupResult = await Stack.ExecuteTrinoQueryAsync(
             "SELECT event_type, COUNT(*) as count FROM iceberg.analytics.events GROUP BY event_type ORDER BY event_type");
 
         // Assert
         _output.WriteLine($"Count result: {countResult}");
         _output.WriteLine($"Group result: {groupResult}");
-        
+
         Assert.Contains("\"3\"", countResult);
         Assert.Contains("\"click\"", groupResult);
         Assert.Contains("\"view\"", groupResult);
@@ -115,7 +103,7 @@ public class TrinoIcebergStackTests : IAsyncLifetime
         using var client = new HttpClient();
 
         // Act
-        var response = await client.GetAsync($"{_stack!.TrinoEndpoint}/v1/info");
+        var response = await client.GetAsync($"{Stack.TrinoEndpoint}/v1/info");
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -131,7 +119,7 @@ public class TrinoIcebergStackTests : IAsyncLifetime
         using var client = new HttpClient();
 
         // Act
-        var response = await client.GetAsync($"{_stack!.NessieEndpoint}/api/v2/config");
+        var response = await client.GetAsync($"{Stack.NessieEndpoint}/api/v2/config");
 
         // Assert
         response.EnsureSuccessStatusCode();
