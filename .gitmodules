@@ -1,0 +1,3 @@
+[submodule "lib/trino-csharp-client"]
+	path = lib/trino-csharp-client
+	url = https://github.com/trinodb/trino-csharp-client.git

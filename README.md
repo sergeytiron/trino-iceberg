@@ -92,9 +92,60 @@ Details:
 - If you enable TLS on MinIO, change endpoints to `https://` and configure Trino truststore.
 - To reset state, remove volumes: `docker compose down -v` (destroys MinIO and Postgres data).
 
+## Trino Client Library (.NET)
+
+This repository includes the official [Trino C# Client](https://github.com/trinodb/trino-csharp-client) as a git submodule for executing queries against Trino.
+
+### Quick Example
+
+```csharp
+using Trino.Client;
+
+// Create a client session
+var sessionProperties = new ClientSessionProperties
+{
+    Server = new Uri("http://localhost:8080"),
+    Catalog = "iceberg",
+    Schema = "default"
+};
+
+var session = new ClientSession(sessionProperties: sessionProperties, auth: null);
+
+// Execute a query
+var executor = await RecordExecutor.Execute(session, "SELECT * FROM my_table");
+
+foreach (var row in executor)
+{
+    Console.WriteLine($"Column 1: {row[0]}, Column 2: {row[1]}");
+}
+```
+
+### Running the Example Application
+
+```bash
+# Start the stack
+docker compose up -d
+
+# Run the example (uses the official Trino C# Client)
+cd examples/TrinoClientExample
+dotnet run
+```
+
+**Key Features:**
+- ✅ Official Trino C# Client from the Trino project
+- ✅ No dependencies on Testcontainers or test infrastructure
+- ✅ Full-featured client with ADO.NET support
+- ✅ Async/await support with streaming
+- ✅ Authentication support (Basic, JWT, OAuth, etc.)
+- ✅ Session management and query parameters
+
+For detailed documentation, see the [official Trino C# Client documentation](https://github.com/trinodb/trino-csharp-client).
+
 ## File layout
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config
 - `trino/etc/catalog/iceberg.properties`: Iceberg catalog using Nessie + S3 (MinIO)
+- `lib/trino-csharp-client/`: Official Trino C# Client (git submodule)
+- `examples/TrinoClientExample/`: Example console application demonstrating client usage
 - `tests/`: C# Testcontainers implementation with integration tests
-- `TrinoIcebergTests.slnx`: .NET solution file for the test project
+- `TrinoIcebergTests.slnx`: .NET solution file including client, example, and tests
