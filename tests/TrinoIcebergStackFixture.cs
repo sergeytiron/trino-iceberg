@@ -1,4 +1,4 @@
-﻿namespace TrinoIcebergTests;
+namespace TrinoIcebergTests;
 
 /// <summary>
 /// xUnit fixture that starts the Trino + Nessie + MinIO stack once and shares it across all tests
@@ -17,10 +17,6 @@ public class TrinoIcebergStackFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (Stack != null)
-        {
-            await Stack.DisposeAsync();
-        }
+        await Stack.DisposeAsync();
     }
 }
-

@@ -1,4 +1,3 @@
-﻿using System.Net;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
@@ -78,7 +77,7 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithPortBinding(MinioS3Port, true)
             .WithPortBinding(MinioConsolePort, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort((ushort)MinioS3Port)
+                .ForPort(MinioS3Port)
                 .ForPath("/minio/health/live")))
             .Build();
     }
@@ -94,7 +93,7 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithEnvironment("NESSIE_VERSION_STORE_TYPE", "IN_MEMORY")
             .WithPortBinding(NessiePort, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort((ushort)NessiePort)
+                .ForPort(NessiePort)
                 .ForPath("/api/v2/config")))
             .Build();
     }
@@ -168,7 +167,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         try
         {
             var execResult = await _trinoContainer.ExecAsync(
-                new[] { "trino", "--execute", sql },
+                ["trino", "--execute", sql],
                 linkedCts.Token).ConfigureAwait(false);
 
             // Trino writes results to stdout and some messages to stderr
@@ -235,7 +234,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         var createBucketCommand = $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
 
         var createBucketResult = await _minioContainer.ExecAsync(
-            new[] { "sh", "-c", createBucketCommand },
+            ["sh", "-c", createBucketCommand],
             cancellationToken).ConfigureAwait(false);
 
         if (createBucketResult.ExitCode != 0)

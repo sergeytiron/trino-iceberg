@@ -5,8 +5,7 @@ namespace TrinoIcebergTests;
 /// <summary>
 /// Integration tests for the Trino + Nessie + MinIO stack
 /// </summary>
-[Collection("TrinoIcebergStack")]
-public class TrinoIcebergStackTests
+public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
 {
     private readonly ITestOutputHelper _output;
     private readonly TrinoIcebergStackFixture _fixture;
@@ -16,11 +15,6 @@ public class TrinoIcebergStackTests
     {
         _output = output;
         _fixture = fixture;
-        _output.WriteLine("Shared stack initialized.");
-        _output.WriteLine($"Trino: {Stack.TrinoEndpoint}");
-        _output.WriteLine($"Nessie: {Stack.NessieEndpoint}");
-        _output.WriteLine($"MinIO API: {Stack.MinioEndpoint}");
-        _output.WriteLine($"MinIO Console: {Stack.MinioConsoleEndpoint}");
     }
 
     /// <summary>
