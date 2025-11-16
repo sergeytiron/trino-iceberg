@@ -12,24 +12,43 @@ public class TrinoIcebergStack : IAsyncDisposable
 {
     private const string MinioRootUser = "minioadmin";
     private const string MinioRootPassword = "minioadmin";
-    private const string MinioS3Port = "9000";
-    private const string MinioConsolePort = "9001";
-    private const string NessiePort = "19120";
-    private const string TrinoPort = "8080";
+    private const int MinioS3Port = 9000;
+    private const int MinioConsolePort = 9001;
+    private const int NessiePort = 19120;
+    private const int TrinoPort = 8080;
     private const string WarehouseBucketName = "warehouse";
+
+    // Container image versions
+    private const string MinioImageVersion = "minio/minio:latest";
+    private const string NessieImageVersion = "ghcr.io/projectnessie/nessie:latest";
+    private const string TrinoImageVersion = "trinodb/trino:478";
 
     private readonly INetwork _network;
     private readonly IContainer _minioContainer;
     private readonly IContainer _nessieContainer;
     private readonly IContainer _trinoContainer;
+    private readonly Action<string>? _logger;
 
-    public string MinioEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(int.Parse(MinioS3Port))}";
-    public string MinioConsoleEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(int.Parse(MinioConsolePort))}";
-    public string NessieEndpoint => $"http://localhost:{_nessieContainer.GetMappedPublicPort(int.Parse(NessiePort))}";
-    public string TrinoEndpoint => $"http://localhost:{_trinoContainer.GetMappedPublicPort(int.Parse(TrinoPort))}";
+    /// <summary>Gets the MinIO S3 API endpoint URL</summary>
+    public string MinioEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(MinioS3Port)}";
 
-    public TrinoIcebergStack()
+    /// <summary>Gets the MinIO console endpoint URL</summary>
+    public string MinioConsoleEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(MinioConsolePort)}";
+
+    /// <summary>Gets the Nessie catalog endpoint URL</summary>
+    public string NessieEndpoint => $"http://localhost:{_nessieContainer.GetMappedPublicPort(NessiePort)}";
+
+    /// <summary>Gets the Trino query engine endpoint URL</summary>
+    public string TrinoEndpoint => $"http://localhost:{_trinoContainer.GetMappedPublicPort(TrinoPort)}";
+
+    /// <summary>
+    /// Initializes a new instance of the Trino + Nessie + MinIO stack.
+    /// </summary>
+    /// <param name="logger">Optional logger for diagnostic messages</param>
+    public TrinoIcebergStack(Action<string>? logger = null)
     {
+        _logger = logger;
+
         // Create a dedicated network for the containers
         _network = new NetworkBuilder()
             .WithName($"trino-test-{Guid.NewGuid():N}")
@@ -49,17 +68,17 @@ public class TrinoIcebergStack : IAsyncDisposable
     private IContainer BuildMinioContainer(INetwork network)
     {
         return new ContainerBuilder()
-            .WithImage("minio/minio:latest")
+            .WithImage(MinioImageVersion)
             .WithName($"minio-{Guid.NewGuid():N}")
             .WithNetwork(network)
             .WithNetworkAliases("minio")
             .WithEnvironment("MINIO_ROOT_USER", MinioRootUser)
             .WithEnvironment("MINIO_ROOT_PASSWORD", MinioRootPassword)
             .WithCommand("server", "/data", "--console-address", $":{MinioConsolePort}")
-            .WithPortBinding(int.Parse(MinioS3Port), true)
-            .WithPortBinding(int.Parse(MinioConsolePort), true)
+            .WithPortBinding(MinioS3Port, true)
+            .WithPortBinding(MinioConsolePort, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(ushort.Parse(MinioS3Port))
+                .ForPort((ushort)MinioS3Port)
                 .ForPath("/minio/health/live")))
             .Build();
     }
@@ -67,15 +86,15 @@ public class TrinoIcebergStack : IAsyncDisposable
     private IContainer BuildNessieContainer(INetwork network)
     {
         return new ContainerBuilder()
-            .WithImage("ghcr.io/projectnessie/nessie:latest")
+            .WithImage(NessieImageVersion)
             .WithName($"nessie-{Guid.NewGuid():N}")
             .WithNetwork(network)
             .WithNetworkAliases("nessie")
             .WithEnvironment("QUARKUS_PROFILE", "prod")
             .WithEnvironment("NESSIE_VERSION_STORE_TYPE", "IN_MEMORY")
-            .WithPortBinding(int.Parse(NessiePort), true)
+            .WithPortBinding(NessiePort, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(ushort.Parse(NessiePort))
+                .ForPort((ushort)NessiePort)
                 .ForPath("/api/v2/config")))
             .Build();
     }
@@ -83,11 +102,11 @@ public class TrinoIcebergStack : IAsyncDisposable
     private IContainer BuildTrinoContainer(INetwork network)
     {
         return new ContainerBuilder()
-            .WithImage("trinodb/trino:478")
+            .WithImage(TrinoImageVersion)
             .WithName($"trino-{Guid.NewGuid():N}")
             .WithNetwork(network)
             .WithNetworkAliases("trino")
-            .WithPortBinding(int.Parse(TrinoPort), true)
+            .WithPortBinding(TrinoPort, true)
             .WithResourceMapping(TrinoConfigurationProvider.GetConfigPropertiesBytes(), "/etc/trino/config.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetNodePropertiesBytes(), "/etc/trino/node.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetLogPropertiesBytes(), "/etc/trino/log.properties")
@@ -97,6 +116,11 @@ public class TrinoIcebergStack : IAsyncDisposable
             .Build();
     }
 
+    /// <summary>
+    /// Starts all containers in the stack in the correct dependency order:
+    /// Network → MinIO → MinIO bucket initialization → Nessie → Trino
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         // Start network
@@ -116,45 +140,104 @@ public class TrinoIcebergStack : IAsyncDisposable
         await _trinoContainer.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<string> ExecuteTrinoQueryAsync(string sql, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Executes a SQL query against Trino and returns the result.
+    /// </summary>
+    /// <param name="sql">The SQL query to execute</param>
+    /// <param name="timeout">Maximum time to wait for query execution (default: 30 seconds)</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>The query output including stdout and stderr</returns>
+    /// <exception cref="ArgumentException">Thrown when SQL is null or empty</exception>
+    /// <exception cref="TimeoutException">Thrown when the query exceeds the timeout</exception>
+    /// <exception cref="OperationCanceledException">Thrown when the operation is canceled via the provided cancellation token</exception>
+    public async Task<string> ExecuteTrinoQueryAsync(
+        string sql,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
             throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
         }
 
-        var execResult = await _trinoContainer.ExecAsync(
-            new[] { "trino", "--execute", sql },
-            cancellationToken).ConfigureAwait(false);
+        timeout ??= TimeSpan.FromSeconds(30);
 
-        // Trino writes results to stdout and some messages to stderr
-        var output = execResult.Stdout;
-        if (!string.IsNullOrEmpty(execResult.Stderr))
+        using var timeoutCts = new CancellationTokenSource(timeout.Value);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        try
         {
-            output += Environment.NewLine + execResult.Stderr;
-        }
+            var execResult = await _trinoContainer.ExecAsync(
+                new[] { "trino", "--execute", sql },
+                linkedCts.Token).ConfigureAwait(false);
 
-        return output;
+            // Trino writes results to stdout and some messages to stderr
+            var output = execResult.Stdout;
+            if (!string.IsNullOrEmpty(execResult.Stderr))
+            {
+                output += Environment.NewLine + execResult.Stderr;
+            }
+
+            return output;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Query execution timed out after {timeout.Value.TotalSeconds} seconds. SQL: {sql}");
+        }
     }
 
+    /// <summary>
+    /// Disposes all containers and the network in reverse order of startup.
+    /// Continues cleanup even if individual disposals fail.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         // Dispose in reverse order of startup
         // Continue cleanup even if individual disposals fail
-        try { await _trinoContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
-        try { await _nessieContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
-        try { await _minioContainer.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
-        try { await _network.DisposeAsync().ConfigureAwait(false); } catch { /* Ignore disposal errors */ }
+        await DisposeContainerAsync(_trinoContainer, "Trino").ConfigureAwait(false);
+        await DisposeContainerAsync(_nessieContainer, "Nessie").ConfigureAwait(false);
+        await DisposeContainerAsync(_minioContainer, "MinIO").ConfigureAwait(false);
+        await DisposeNetworkAsync().ConfigureAwait(false);
+    }
+
+    private async Task DisposeContainerAsync(IContainer container, string name)
+    {
+        try
+        {
+            await container.DisposeAsync().ConfigureAwait(false);
+            _logger?.Invoke($"{name} container disposed successfully");
+        }
+        catch (Exception ex)
+        {
+            var message = $"Error disposing {name} container: {ex.Message}";
+            _logger?.Invoke(message);
+            // Continue cleanup even if disposal fails
+        }
+    }
+
+    private async Task DisposeNetworkAsync()
+    {
+        try
+        {
+            await _network.DisposeAsync().ConfigureAwait(false);
+            _logger?.Invoke("Network disposed successfully");
+        }
+        catch (Exception ex)
+        {
+            var message = $"Error disposing network: {ex.Message}";
+            _logger?.Invoke(message);
+            // Continue cleanup even if disposal fails
+        }
     }
 
     private async Task InitializeMinIOBucketAsync(CancellationToken cancellationToken)
     {
         var createBucketCommand = $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
-        
+
         var createBucketResult = await _minioContainer.ExecAsync(
             new[] { "sh", "-c", createBucketCommand },
             cancellationToken).ConfigureAwait(false);
-        
+
         if (createBucketResult.ExitCode != 0)
         {
             throw new InvalidOperationException(

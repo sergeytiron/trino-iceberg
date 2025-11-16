@@ -10,8 +10,9 @@ public class TrinoIcebergStackFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // xUnit's IAsyncLifetime doesn't provide a cancellation token, but we use default
         Stack = new TrinoIcebergStack();
-        await Stack.StartAsync();
+        await Stack.StartAsync(CancellationToken.None);
     }
 
     public async Task DisposeAsync()
