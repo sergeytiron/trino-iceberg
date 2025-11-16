@@ -2,6 +2,9 @@
   <Folder Name="/examples/">
     <Project Path="examples/TrinoClientExample/TrinoClientExample.csproj" />
   </Folder>
+  <Folder Name="/lib/">
+    <Project Path="lib/Trino.Client.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/TrinoClient/TrinoClient.csproj" />
   </Folder>
