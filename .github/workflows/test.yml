@@ -1,0 +1,17 @@
+name: .NET Tests
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Test
+      run: dotnet test TrinoIcebergTests.slnx
