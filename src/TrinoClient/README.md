@@ -1,10 +1,11 @@
 # TrinoClient
 
-A lightweight .NET client library for executing queries against Trino (formerly PrestoSQL) using the Trino REST API.
+A lightweight .NET client library for executing queries against Trino (formerly PrestoSQL). This is a simplified wrapper around the official [Trino C# Client](https://github.com/trinodb/trino-csharp-client).
 
 ## Features
 
-- ✅ Execute SQL queries against any Trino server via HTTP
+- ✅ Execute SQL queries against any Trino server
+- ✅ Built on the official Trino C# Client library
 - ✅ No dependencies on Testcontainers or test infrastructure
 - ✅ Simple, intuitive API
 - ✅ Async/await support
@@ -100,30 +101,7 @@ var schema = Environment.GetEnvironmentVariable("TRINO_SCHEMA") ?? "default";
 using var client = new TrinoQueryClient(trinoEndpoint, catalog, schema);
 ```
 
-### Custom HttpClient
 
-If you want to manage the HttpClient lifecycle yourself (e.g., for connection pooling):
-
-```csharp
-var httpClient = new HttpClient();
-using var client = new TrinoQueryClient(
-    "http://localhost:8080", 
-    "iceberg", 
-    "default", 
-    httpClient: httpClient
-);
-
-// The client will NOT dispose the HttpClient
-```
-
-### Raw JSON Response
-
-For debugging or when you need access to metadata:
-
-```csharp
-var jsonResponse = await client.ExecuteQueryRawAsync("SELECT * FROM my_table");
-Console.WriteLine(jsonResponse);
-```
 
 ## API Reference
 
@@ -133,8 +111,7 @@ Console.WriteLine(jsonResponse);
 public TrinoQueryClient(
     string trinoEndpoint,       // e.g., "http://localhost:8080"
     string catalog = "iceberg",  // Default catalog
-    string schema = "default",   // Default schema
-    HttpClient? httpClient = null // Optional HttpClient instance
+    string schema = "default"    // Default schema
 )
 ```
 
@@ -155,19 +132,6 @@ public async Task<List<List<object?>>> ExecuteQueryAsync(
 - `ArgumentException` - When SQL is null or empty
 - `TrinoQueryException` - When the query fails
 
-### ExecuteQueryRawAsync
-
-Executes a SQL query and returns the raw JSON response.
-
-```csharp
-public async Task<string> ExecuteQueryRawAsync(
-    string sql,
-    CancellationToken cancellationToken = default
-)
-```
-
-**Returns**: The final query response as a JSON string.
-
 ## Error Handling
 
 ```csharp
@@ -185,13 +149,11 @@ catch (Exception ex)
 }
 ```
 
-## Configuration
+## Under the Hood
 
-The client uses the following Trino HTTP headers:
+This library is a simplified wrapper around the official [Trino C# Client](https://github.com/trinodb/trino-csharp-client), which provides a comprehensive .NET client for Trino with ADO.NET interfaces, authentication support, and advanced features.
 
-- `X-Trino-Catalog`: The catalog to use (configurable via constructor)
-- `X-Trino-Schema`: The schema to use (configurable via constructor)
-- `X-Trino-User`: Fixed to "trino-client"
+The wrapper provides a simple interface for basic query operations while leveraging the battle-tested official client for all communication with Trino servers.
 
 ## Testing
 

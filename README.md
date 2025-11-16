@@ -94,7 +94,7 @@ Details:
 
 ## Trino Client Library (.NET)
 
-This repository includes a standalone .NET client library for executing queries against Trino.
+This repository includes a standalone .NET client library for executing queries against Trino. The library is a simplified wrapper around the official [Trino C# Client](https://github.com/trinodb/trino-csharp-client).
 
 ### Quick Example
 
@@ -122,8 +122,9 @@ dotnet run
 ```
 
 **Key Features:**
-- ✅ HTTP-based client using Trino REST API
+- ✅ Built on the official Trino C# Client
 - ✅ No dependencies on Testcontainers or test infrastructure
+- ✅ Simple, intuitive API for common operations
 - ✅ Async/await support with cancellation tokens
 - ✅ Structured result sets as `List<List<object?>>`
 - ✅ Proper error handling with `TrinoQueryException`
