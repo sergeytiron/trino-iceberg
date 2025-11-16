@@ -1,3 +1,9 @@
 <Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/TrinoClientExample/TrinoClientExample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/TrinoClient/TrinoClient.csproj" />
+  </Folder>
   <Project Path="tests\TrinoIcebergTests.csproj" />
 </Solution>
