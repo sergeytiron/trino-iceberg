@@ -18,11 +18,5 @@ jobs:
       with:
         dotnet-version: '10.0.x'
     
-    - name: Restore dependencies
-      run: dotnet restore TrinoIcebergTests.slnx
-    
-    - name: Build
-      run: dotnet build TrinoIcebergTests.slnx --no-restore
-    
     - name: Test
-      run: dotnet test TrinoIcebergTests.slnx --no-build --verbosity normal
+      run: dotnet test TrinoIcebergTests.slnx
