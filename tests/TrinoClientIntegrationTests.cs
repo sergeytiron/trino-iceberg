@@ -1,10 +1,10 @@
-using TrinoClient;
+using Trino.Client;
 using Xunit.Abstractions;
 
 namespace TrinoIcebergTests;
 
 /// <summary>
-/// Integration tests for TrinoQueryClient against a real Trino stack
+/// Integration tests for official Trino.Client against a real Trino stack
 /// </summary>
 public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixture>
 {
@@ -24,15 +24,43 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     private static string GetUniqueSchemaName(string baseName) =>
         $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
+    /// <summary>
+    /// Helper to execute a query and return results as a list
+    /// </summary>
+    private static async Task<List<List<object>>> ExecuteQueryAsync(ClientSession session, string sql)
+    {
+        var executor = await RecordExecutor.Execute(session, sql);
+        var results = new List<List<object>>();
+        foreach (var row in executor)
+        {
+            results.Add(row);
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Create a client session
+    /// </summary>
+    private ClientSession CreateSession()
+    {
+        var sessionProperties = new ClientSessionProperties
+        {
+            Server = new Uri(Stack.TrinoEndpoint),
+            Catalog = "iceberg",
+            Schema = "default"
+        };
+        return new ClientSession(sessionProperties: sessionProperties, auth: null);
+    }
+
     [Fact]
     public async Task TrinoClient_CanCreateSchema()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Act
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
 
         // Assert
@@ -44,23 +72,23 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_CanCreateTableAndInsertData()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Create schema
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
 
         // Act - Create table
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.test_data (id int, value varchar) WITH (format='PARQUET')");
 
         // Act - Insert data
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"INSERT INTO iceberg.{schemaName}.test_data VALUES (100, 'test'), (200, 'data')");
 
         // Assert - Query to verify
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT * FROM iceberg.{schemaName}.test_data ORDER BY id");
 
         _output.WriteLine($"Query returned {results.Count} rows");
@@ -81,19 +109,19 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_CanExecuteSelectQuery()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Setup test data
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.numbers (n int) WITH (format='PARQUET')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"INSERT INTO iceberg.{schemaName}.numbers VALUES (1), (2), (3), (4), (5)");
 
         // Act
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT n FROM iceberg.{schemaName}.numbers WHERE n > 2 ORDER BY n");
 
         // Assert
@@ -108,19 +136,19 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_CanExecuteAggregateQuery()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Setup test data
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.sales (amount bigint, category varchar) WITH (format='PARQUET')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"INSERT INTO iceberg.{schemaName}.sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')");
 
         // Act
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT category, SUM(amount) as total FROM iceberg.{schemaName}.sales GROUP BY category ORDER BY category");
 
         // Assert
@@ -140,19 +168,19 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_CanExecuteCountQuery()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Setup test data
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.items (id int) WITH (format='PARQUET')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"INSERT INTO iceberg.{schemaName}.items VALUES (1), (2), (3), (4), (5), (6), (7)");
 
         // Act
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT COUNT(*) as total FROM iceberg.{schemaName}.items");
 
         // Assert
@@ -166,17 +194,17 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_HandlesEmptyResultSet()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Setup test data
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.empty_table (id int) WITH (format='PARQUET')");
 
         // Act
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT * FROM iceberg.{schemaName}.empty_table");
 
         // Assert
@@ -188,22 +216,22 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_CanExecuteMultipleQueriesSequentially()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Setup
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.counter (value int) WITH (format='PARQUET')");
 
         // Act - Execute multiple inserts
-        await client.ExecuteQueryAsync($"INSERT INTO iceberg.{schemaName}.counter VALUES (1)");
-        await client.ExecuteQueryAsync($"INSERT INTO iceberg.{schemaName}.counter VALUES (2)");
-        await client.ExecuteQueryAsync($"INSERT INTO iceberg.{schemaName}.counter VALUES (3)");
+        await ExecuteQueryAsync(session, $"INSERT INTO iceberg.{schemaName}.counter VALUES (1)");
+        await ExecuteQueryAsync(session, $"INSERT INTO iceberg.{schemaName}.counter VALUES (2)");
+        await ExecuteQueryAsync(session, $"INSERT INTO iceberg.{schemaName}.counter VALUES (3)");
 
         // Query final state
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT SUM(value) as total FROM iceberg.{schemaName}.counter");
 
         // Assert
@@ -216,30 +244,30 @@ public class TrinoClientIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
     public async Task TrinoClient_ThrowsExceptionForInvalidSQL()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
 
-        // Act & Assert
-        await Assert.ThrowsAsync<TrinoQueryException>(async () =>
-            await client.ExecuteQueryAsync("SELECT * FROM nonexistent.invalid.table"));
+        // Act & Assert - TrinoAggregateException wraps TrinoException for query errors
+        await Assert.ThrowsAsync<TrinoAggregateException>(async () =>
+            await ExecuteQueryAsync(session, "SELECT * FROM nonexistent.invalid.table"));
     }
 
     [Fact]
     public async Task TrinoClient_CanHandleComplexDataTypes()
     {
         // Arrange
-        using var client = new TrinoQueryClient(Stack.TrinoEndpoint, "iceberg", "default");
+        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
 
         // Setup test data with various types
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"CREATE TABLE iceberg.{schemaName}.mixed_types (id int, name varchar, amount bigint, active boolean) WITH (format='PARQUET')");
-        await client.ExecuteQueryAsync(
+        await ExecuteQueryAsync(session,
             $"INSERT INTO iceberg.{schemaName}.mixed_types VALUES (1, 'Alice', 1000, true), (2, 'Bob', 2000, false)");
 
         // Act
-        var results = await client.ExecuteQueryAsync(
+        var results = await ExecuteQueryAsync(session,
             $"SELECT * FROM iceberg.{schemaName}.mixed_types ORDER BY id");
 
         // Assert

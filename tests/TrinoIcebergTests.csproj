@@ -20,7 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\src\TrinoClient\TrinoClient.csproj" />
+      <ProjectReference Include="..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
     </ItemGroup>
 
 </Project>

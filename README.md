@@ -94,17 +94,27 @@ Details:
 
 ## Trino Client Library (.NET)
 
-This repository includes a standalone .NET client library for executing queries against Trino. The library is a simplified wrapper around the official [Trino C# Client](https://github.com/trinodb/trino-csharp-client).
+This repository includes the official [Trino C# Client](https://github.com/trinodb/trino-csharp-client) as a git submodule for executing queries against Trino.
 
 ### Quick Example
 
 ```csharp
-using TrinoClient;
+using Trino.Client;
 
-using var client = new TrinoQueryClient("http://localhost:8080", "iceberg", "default");
-var results = await client.ExecuteQueryAsync("SELECT * FROM my_table");
+// Create a client session
+var sessionProperties = new ClientSessionProperties
+{
+    Server = new Uri("http://localhost:8080"),
+    Catalog = "iceberg",
+    Schema = "default"
+};
 
-foreach (var row in results)
+var session = new ClientSession(sessionProperties: sessionProperties, auth: null);
+
+// Execute a query
+var executor = await RecordExecutor.Execute(session, "SELECT * FROM my_table");
+
+foreach (var row in executor)
 {
     Console.WriteLine($"Column 1: {row[0]}, Column 2: {row[1]}");
 }
@@ -116,26 +126,26 @@ foreach (var row in results)
 # Start the stack
 docker compose up -d
 
-# Run the example (uses the TrinoClient library)
+# Run the example (uses the official Trino C# Client)
 cd examples/TrinoClientExample
 dotnet run
 ```
 
 **Key Features:**
-- ✅ Built on the official Trino C# Client
+- ✅ Official Trino C# Client from the Trino project
 - ✅ No dependencies on Testcontainers or test infrastructure
-- ✅ Simple, intuitive API for common operations
-- ✅ Async/await support with cancellation tokens
-- ✅ Structured result sets as `List<List<object?>>`
-- ✅ Proper error handling with `TrinoQueryException`
+- ✅ Full-featured client with ADO.NET support
+- ✅ Async/await support with streaming
+- ✅ Authentication support (Basic, JWT, OAuth, etc.)
+- ✅ Session management and query parameters
 
-For detailed documentation, see [`src/TrinoClient/README.md`](src/TrinoClient/README.md).
+For detailed documentation, see the [official Trino C# Client documentation](https://github.com/trinodb/trino-csharp-client).
 
 ## File layout
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config
 - `trino/etc/catalog/iceberg.properties`: Iceberg catalog using Nessie + S3 (MinIO)
-- `src/TrinoClient/`: Standalone .NET client library for Trino (no test dependencies)
+- `lib/trino-csharp-client/`: Official Trino C# Client (git submodule)
 - `examples/TrinoClientExample/`: Example console application demonstrating client usage
 - `tests/`: C# Testcontainers implementation with integration tests
 - `TrinoIcebergTests.slnx`: .NET solution file including client, example, and tests
