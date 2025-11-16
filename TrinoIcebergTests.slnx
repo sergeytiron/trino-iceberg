@@ -5,8 +5,5 @@
   <Folder Name="/src/">
     <Project Path="src/TrinoClient/TrinoClient.csproj" />
   </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/TrinoClient.Tests/TrinoClient.Tests.csproj" />
-  </Folder>
   <Project Path="tests\TrinoIcebergTests.csproj" />
 </Solution>
