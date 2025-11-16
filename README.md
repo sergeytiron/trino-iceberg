@@ -92,9 +92,49 @@ Details:
 - If you enable TLS on MinIO, change endpoints to `https://` and configure Trino truststore.
 - To reset state, remove volumes: `docker compose down -v` (destroys MinIO and Postgres data).
 
+## Trino Client Library (.NET)
+
+This repository includes a standalone .NET client library for executing queries against Trino.
+
+### Quick Example
+
+```csharp
+using TrinoClient;
+
+using var client = new TrinoQueryClient("http://localhost:8080", "iceberg", "default");
+var results = await client.ExecuteQueryAsync("SELECT * FROM my_table");
+
+foreach (var row in results)
+{
+    Console.WriteLine($"Column 1: {row[0]}, Column 2: {row[1]}");
+}
+```
+
+### Running the Example Application
+
+```bash
+# Start the stack
+docker compose up -d
+
+# Run the example (uses the TrinoClient library)
+cd examples/TrinoClientExample
+dotnet run
+```
+
+**Key Features:**
+- ✅ HTTP-based client using Trino REST API
+- ✅ No dependencies on Testcontainers or test infrastructure
+- ✅ Async/await support with cancellation tokens
+- ✅ Structured result sets as `List<List<object?>>`
+- ✅ Proper error handling with `TrinoQueryException`
+
+For detailed documentation, see [`src/TrinoClient/README.md`](src/TrinoClient/README.md).
+
 ## File layout
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config
 - `trino/etc/catalog/iceberg.properties`: Iceberg catalog using Nessie + S3 (MinIO)
+- `src/TrinoClient/`: Standalone .NET client library for Trino (no test dependencies)
+- `examples/TrinoClientExample/`: Example console application demonstrating client usage
 - `tests/`: C# Testcontainers implementation with integration tests
-- `TrinoIcebergTests.slnx`: .NET solution file for the test project
+- `TrinoIcebergTests.slnx`: .NET solution file including client, example, and tests
