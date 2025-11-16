@@ -148,7 +148,8 @@ public class TrinoIcebergStack : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     /// <returns>The query output including stdout and stderr</returns>
     /// <exception cref="ArgumentException">Thrown when SQL is null or empty</exception>
-    /// <exception cref="OperationCanceledException">Thrown when the query exceeds the timeout</exception>
+    /// <exception cref="TimeoutException">Thrown when the query exceeds the timeout</exception>
+    /// <exception cref="OperationCanceledException">Thrown when the operation is canceled via the provided cancellation token</exception>
     public async Task<string> ExecuteTrinoQueryAsync(
         string sql,
         TimeSpan? timeout = null,
