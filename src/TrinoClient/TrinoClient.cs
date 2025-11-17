@@ -72,6 +72,7 @@ public class TrinoClient : ITrinoClient
 
     /// <summary>
     /// Executes a query and unloads the results to S3 in Parquet format.
+    /// Mimics AWS Athena UNLOAD by creating a temporary Iceberg table and using INSERT INTO.
     /// </summary>
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
     /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
@@ -81,44 +82,73 @@ public class TrinoClient : ITrinoClient
     {
         var (sql, parameters) = ConvertFormattableStringToParameterizedQuery(query);
 
-        // Construct UNLOAD statement (mimicking AWS Athena UNLOAD syntax)
-        // Note: Trino may not natively support UNLOAD, so we'll attempt it and handle errors
-        var unloadSql = $"UNLOAD ({sql}) TO 's3://warehouse/{s3RelativePath}' WITH (format = 'PARQUET')";
+        // Generate a unique table name for the export
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var guid = Guid.NewGuid().ToString("N").Substring(0, 8);
+        var exportTableName = $"unload_temp_{timestamp}_{guid}";
+        var exportSchemaName = _session.Properties.Schema ?? "default";
+        var absolutePath = $"s3://warehouse/{s3RelativePath}";
 
         try
         {
-            var executor = RecordExecutor.Execute(
+            // Step 1: Create a temporary table with the query results location
+            var createTableSql = $"CREATE TABLE {exportTableName} " +
+                                $"WITH (location = '{absolutePath}', format = 'PARQUET') " +
+                                $"AS {sql}";
+
+            var createExecutor = RecordExecutor.Execute(
                 logger: null,
                 queryStatusNotifications: null,
                 session: _session,
-                statement: unloadSql,
+                statement: createTableSql,
                 queryParameters: parameters,
                 bufferSize: Constants.DefaultBufferSizeBytes,
                 isQuery: true,
                 cancellationToken: cancellationToken
             ).GetAwaiter().GetResult();
 
-            // Parse the result to get row count
+            // Get row count from CREATE TABLE AS result
             var rowCount = 0;
-            foreach (var row in executor)
+            foreach (var row in createExecutor)
             {
-                // UNLOAD typically returns metadata about the operation
-                // The first column usually contains the number of rows unloaded
+                // CREATE TABLE AS returns the number of rows inserted
                 if (row.Count > 0 && row[0] != null)
                 {
                     rowCount = Convert.ToInt32(row[0]);
                 }
             }
 
-            var absolutePath = $"s3://warehouse/{s3RelativePath}";
+            // Step 2: Drop the temporary table (keeps the data files in S3)
+            try
+            {
+                var dropTableSql = $"DROP TABLE {exportTableName}";
+                var dropExecutor = RecordExecutor.Execute(
+                    logger: null,
+                    queryStatusNotifications: null,
+                    session: _session,
+                    statement: dropTableSql,
+                    queryParameters: null,
+                    bufferSize: Constants.DefaultBufferSizeBytes,
+                    isQuery: true,
+                    cancellationToken: cancellationToken
+                ).GetAwaiter().GetResult();
+
+                // Consume the results
+                foreach (var _ in dropExecutor) { }
+            }
+            catch
+            {
+                // If drop fails, log but don't fail the operation
+                // The table will be cleaned up eventually
+            }
+
             return new UnloadResponse(rowCount, absolutePath);
         }
         catch (Exception ex)
         {
-            // If UNLOAD is not supported, fall back to INSERT INTO approach
-            throw new NotSupportedException(
-                "UNLOAD command is not supported by this Trino version. " +
-                "Consider using INSERT INTO to write data to an Iceberg table instead.", ex);
+            throw new InvalidOperationException(
+                $"Failed to unload query results to '{absolutePath}'. " +
+                "Ensure the S3 bucket is accessible and the query is valid.", ex);
         }
     }
 

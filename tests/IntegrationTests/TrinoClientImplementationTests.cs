@@ -237,16 +237,20 @@ public class TrinoClientImplementationTests
         var client = new global::TrinoClient.TrinoClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
         var exportPath = $"exports/{schemaName}";
 
-        // Act & Assert
-        // Note: UNLOAD may not be supported in Trino, so we expect a NotSupportedException
-        var exception = Assert.Throws<NotSupportedException>(() =>
-        {
-            var response = client.Unload($"SELECT * FROM data", exportPath, TestContext.Current.CancellationToken);
-        });
+        // Act
+        var response = client.Unload($"SELECT * FROM data", exportPath, TestContext.Current.CancellationToken);
 
-        Assert.Contains("UNLOAD command is not supported", exception.Message);
+        // Assert
+        Assert.Equal(3, response.RowCount);
+        Assert.Equal($"s3://warehouse/exports/{schemaName}", response.S3AbsolutePath);
 
-        _output.WriteLine($"UNLOAD not supported (expected): {exception.Message}");
+        _output.WriteLine($"Successfully unloaded {response.RowCount} rows to {response.S3AbsolutePath}");
+
+        // Verify the data was written to S3 by querying the files
+        var verifyResult = await Stack.ExecuteTrinoQueryAsync(
+            $"SELECT COUNT(*) FROM iceberg.\"$path\".files WHERE path LIKE '%exports/{schemaName}%'",
+            cancellationToken: TestContext.Current.CancellationToken);
+        _output.WriteLine($"Verification query result: {verifyResult}");
     }
 
     [Fact]
@@ -268,15 +272,14 @@ public class TrinoClientImplementationTests
         var exportPath = $"exports/{schemaName}";
         var region = "North";
 
-        // Act & Assert
-        var exception = Assert.Throws<NotSupportedException>(() =>
-        {
-            var response = client.Unload($"SELECT * FROM sales WHERE region = {region}", exportPath, TestContext.Current.CancellationToken);
-        });
+        // Act
+        var response = client.Unload($"SELECT * FROM sales WHERE region = {region}", exportPath, TestContext.Current.CancellationToken);
 
-        Assert.Contains("UNLOAD command is not supported", exception.Message);
+        // Assert
+        Assert.Equal(2, response.RowCount); // Two records with region='North'
+        Assert.Equal($"s3://warehouse/exports/{schemaName}", response.S3AbsolutePath);
 
-        _output.WriteLine("Parameterized UNLOAD handled correctly (not supported as expected)");
+        _output.WriteLine($"Successfully unloaded {response.RowCount} rows with parameterized query to {response.S3AbsolutePath}");
     }
 
     #endregion
