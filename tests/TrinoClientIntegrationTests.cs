@@ -38,15 +38,15 @@ public class TrinoClientIntegrationTests
     }
 
     /// <summary>
-    /// Create a client session
+    /// Create a client session with a specific schema
     /// </summary>
-    private ClientSession CreateSession()
+    private ClientSession CreateSession(string schemaName)
     {
         var sessionProperties = new ClientSessionProperties
         {
             Server = new Uri(Stack.TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = "default"
+            Schema = schemaName
         };
         return new ClientSession(sessionProperties: sessionProperties, auth: null);
     }
@@ -55,12 +55,12 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanCreateSchema()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Act
         var results = await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
 
         // Assert
         _output.WriteLine($"Create schema results: {results.Count} rows");
@@ -71,24 +71,24 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanCreateTableAndInsertData()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Create schema
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
 
         // Act - Create table
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.test_data (id int, value varchar)");
+            "CREATE TABLE test_data (id int, value varchar)");
 
         // Act - Insert data
         await ExecuteQueryAsync(session,
-            $"INSERT INTO iceberg.{schemaName}.test_data VALUES (100, 'test'), (200, 'data')");
+            "INSERT INTO test_data VALUES (100, 'test'), (200, 'data')");
 
         // Assert - Query to verify
         var results = await ExecuteQueryAsync(session,
-            $"SELECT * FROM iceberg.{schemaName}.test_data ORDER BY id");
+            "SELECT * FROM test_data ORDER BY id");
 
         _output.WriteLine($"Query returned {results.Count} rows");
         Assert.Equal(2, results.Count);
@@ -108,20 +108,20 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanExecuteSelectQuery()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Setup test data
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.numbers (n int)");
+            "CREATE TABLE numbers (n int)");
         await ExecuteQueryAsync(session,
-            $"INSERT INTO iceberg.{schemaName}.numbers VALUES (1), (2), (3), (4), (5)");
+            "INSERT INTO numbers VALUES (1), (2), (3), (4), (5)");
 
         // Act
         var results = await ExecuteQueryAsync(session,
-            $"SELECT n FROM iceberg.{schemaName}.numbers WHERE n > 2 ORDER BY n");
+            "SELECT n FROM numbers WHERE n > 2 ORDER BY n");
 
         // Assert
         _output.WriteLine($"Query returned {results.Count} rows");
@@ -135,20 +135,20 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanExecuteAggregateQuery()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Setup test data
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.sales (amount bigint, category varchar)");
+            "CREATE TABLE sales (amount bigint, category varchar)");
         await ExecuteQueryAsync(session,
-            $"INSERT INTO iceberg.{schemaName}.sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')");
+            "INSERT INTO sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')");
 
         // Act
         var results = await ExecuteQueryAsync(session,
-            $"SELECT category, SUM(amount) as total FROM iceberg.{schemaName}.sales GROUP BY category ORDER BY category");
+            "SELECT category, SUM(amount) as total FROM sales GROUP BY category ORDER BY category");
 
         // Assert
         _output.WriteLine($"Aggregate query returned {results.Count} rows");
@@ -167,20 +167,20 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanExecuteCountQuery()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Setup test data
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.items (id int)");
+            "CREATE TABLE items (id int)");
         await ExecuteQueryAsync(session,
-            $"INSERT INTO iceberg.{schemaName}.items VALUES (1), (2), (3), (4), (5), (6), (7)");
+            "INSERT INTO items VALUES (1), (2), (3), (4), (5), (6), (7)");
 
         // Act
         var results = await ExecuteQueryAsync(session,
-            $"SELECT COUNT(*) as total FROM iceberg.{schemaName}.items");
+            "SELECT COUNT(*) as total FROM items");
 
         // Assert
         _output.WriteLine($"Count query returned {results.Count} rows");
@@ -193,18 +193,18 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_HandlesEmptyResultSet()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Setup test data
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.empty_table (id int)");
+            "CREATE TABLE empty_table (id int)");
 
         // Act
         var results = await ExecuteQueryAsync(session,
-            $"SELECT * FROM iceberg.{schemaName}.empty_table");
+            "SELECT * FROM empty_table");
 
         // Assert
         _output.WriteLine($"Empty query returned {results.Count} rows");
@@ -215,23 +215,23 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanExecuteMultipleQueriesSequentially()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Setup
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.counter (value int)");
+            "CREATE TABLE counter (value int)");
 
         // Act - Execute multiple inserts
-        await ExecuteQueryAsync(session, $"INSERT INTO iceberg.{schemaName}.counter VALUES (1)");
-        await ExecuteQueryAsync(session, $"INSERT INTO iceberg.{schemaName}.counter VALUES (2)");
-        await ExecuteQueryAsync(session, $"INSERT INTO iceberg.{schemaName}.counter VALUES (3)");
+        await ExecuteQueryAsync(session, "INSERT INTO counter VALUES (1)");
+        await ExecuteQueryAsync(session, "INSERT INTO counter VALUES (2)");
+        await ExecuteQueryAsync(session, "INSERT INTO counter VALUES (3)");
 
         // Query final state
         var results = await ExecuteQueryAsync(session,
-            $"SELECT SUM(value) as total FROM iceberg.{schemaName}.counter");
+            "SELECT SUM(value) as total FROM counter");
 
         // Assert
         _output.WriteLine($"Sequential queries result: {results.Count} rows");
@@ -243,7 +243,8 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_ThrowsExceptionForInvalidSQL()
     {
         // Arrange
-        var session = CreateSession();
+        var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Act & Assert - TrinoAggregateException wraps TrinoException for query errors
         await Assert.ThrowsAsync<TrinoAggregateException>(async () =>
@@ -254,20 +255,20 @@ public class TrinoClientIntegrationTests
     public async Task TrinoClient_CanHandleComplexDataTypes()
     {
         // Arrange
-        var session = CreateSession();
         var schemaName = GetUniqueSchemaName("client_test");
+        var session = CreateSession(schemaName);
 
         // Setup test data with various types
         await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         await ExecuteQueryAsync(session,
-            $"CREATE TABLE iceberg.{schemaName}.mixed_types (id int, name varchar, amount bigint, active boolean)");
+            "CREATE TABLE mixed_types (id int, name varchar, amount bigint, active boolean)");
         await ExecuteQueryAsync(session,
-            $"INSERT INTO iceberg.{schemaName}.mixed_types VALUES (1, 'Alice', 1000, true), (2, 'Bob', 2000, false)");
+            "INSERT INTO mixed_types VALUES (1, 'Alice', 1000, true), (2, 'Bob', 2000, false)");
 
         // Act
         var results = await ExecuteQueryAsync(session,
-            $"SELECT * FROM iceberg.{schemaName}.mixed_types ORDER BY id");
+            "SELECT * FROM mixed_types ORDER BY id");
 
         // Assert
         _output.WriteLine($"Mixed types query returned {results.Count} rows");

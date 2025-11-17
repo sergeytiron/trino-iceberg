@@ -25,15 +25,15 @@ public class TrinoAdoNetIntegrationTests
         $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
     /// <summary>
-    /// Create a Trino connection
+    /// Create a Trino connection with a specific schema
     /// </summary>
-    private TrinoConnection CreateConnection()
+    private TrinoConnection CreateConnection(string schemaName)
     {
         var properties = new TrinoConnectionProperties
         {
             Server = new Uri(Stack.TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = "default"
+            Schema = schemaName
         };
         return new TrinoConnection(properties);
     }
@@ -42,7 +42,8 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanOpenConnection()
     {
         // Arrange
-        using var connection = CreateConnection();
+        var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
 
         // Act
         connection.Open();
@@ -56,13 +57,13 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanCreateSchema()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Act
         using var command = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         command.ExecuteNonQuery();
 
         // Assert - query should complete without error
@@ -73,32 +74,32 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanExecuteScalar()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.test_table (id int, value varchar)"))
+            "CREATE TABLE test_table (id int, value varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"INSERT INTO iceberg.{schemaName}.test_table VALUES (1, 'test')"))
+            "INSERT INTO test_table VALUES (1, 'test')"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
         using var command = new TrinoCommand(connection,
-            $"SELECT COUNT(*) FROM iceberg.{schemaName}.test_table");
+            "SELECT COUNT(*) FROM test_table");
         var result = command.ExecuteScalar();
 
         // Assert
@@ -112,32 +113,32 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanExecuteReader()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.users (id int, name varchar, age int)"))
+            "CREATE TABLE users (id int, name varchar, age int)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"INSERT INTO iceberg.{schemaName}.users VALUES (1, 'Alice', 30), (2, 'Bob', 25), (3, 'Charlie', 35)"))
+            "INSERT INTO users VALUES (1, 'Alice', 30), (2, 'Bob', 25), (3, 'Charlie', 35)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
         using var command = new TrinoCommand(connection,
-            $"SELECT id, name, age FROM iceberg.{schemaName}.users ORDER BY id");
+            "SELECT id, name, age FROM users ORDER BY id");
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -163,32 +164,32 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_ReaderHasCorrectSchema()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.schema_test (id int, name varchar, active boolean)"))
+            "CREATE TABLE schema_test (id int, name varchar, active boolean)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"INSERT INTO iceberg.{schemaName}.schema_test VALUES (1, 'test', true)"))
+            "INSERT INTO schema_test VALUES (1, 'test', true)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
         using var command = new TrinoCommand(connection,
-            $"SELECT * FROM iceberg.{schemaName}.schema_test");
+            "SELECT * FROM schema_test");
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -208,32 +209,32 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanHandleNullValues()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.null_test (id int, nullable_value varchar)"))
+            "CREATE TABLE null_test (id int, nullable_value varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"INSERT INTO iceberg.{schemaName}.null_test VALUES (1, null), (2, 'not null')"))
+            "INSERT INTO null_test VALUES (1, null), (2, 'not null')"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
         using var command = new TrinoCommand(connection,
-            $"SELECT id, nullable_value FROM iceberg.{schemaName}.null_test ORDER BY id");
+            "SELECT id, nullable_value FROM null_test ORDER BY id");
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -252,32 +253,32 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanExecuteAggregateQuery()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.sales (amount bigint, category varchar)"))
+            "CREATE TABLE sales (amount bigint, category varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"INSERT INTO iceberg.{schemaName}.sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')"))
+            "INSERT INTO sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
         using var command = new TrinoCommand(connection,
-            $"SELECT category, SUM(amount) as total FROM iceberg.{schemaName}.sales GROUP BY category ORDER BY category");
+            "SELECT category, SUM(amount) as total FROM sales GROUP BY category ORDER BY category");
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -301,11 +302,12 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_ConnectionPropertiesWork()
     {
         // Arrange
+        var schemaName = GetUniqueSchemaName("ado_test");
         var properties = new TrinoConnectionProperties
         {
             Server = new Uri(Stack.TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = "default"
+            Schema = schemaName
         };
         using var connection = new TrinoConnection(properties);
 
@@ -321,7 +323,8 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_CanUseCommandWithCommandText()
     {
         // Arrange
-        using var connection = CreateConnection();
+        var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
         connection.Open();
 
         // Act
@@ -339,34 +342,34 @@ public class TrinoAdoNetIntegrationTests
     public void AdoNet_MultipleCommandsOnSameConnection()
     {
         // Arrange
-        using var connection = CreateConnection();
-        connection.Open();
         var schemaName = GetUniqueSchemaName("ado_test");
+        using var connection = CreateConnection(schemaName);
+        connection.Open();
 
         // Act & Assert - Execute multiple commands
         using (var cmd1 = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
+            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             cmd1.ExecuteNonQuery();
             _output.WriteLine("Command 1: Schema created");
         }
 
         using (var cmd2 = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.multi_cmd_test (value int)"))
+            "CREATE TABLE multi_cmd_test (value int)"))
         {
             cmd2.ExecuteNonQuery();
             _output.WriteLine("Command 2: Table created");
         }
 
         using (var cmd3 = new TrinoCommand(connection,
-            $"INSERT INTO iceberg.{schemaName}.multi_cmd_test VALUES (42)"))
+            "INSERT INTO multi_cmd_test VALUES (42)"))
         {
             cmd3.ExecuteNonQuery();
             _output.WriteLine("Command 3: Data inserted");
         }
 
         using (var cmd4 = new TrinoCommand(connection,
-            $"SELECT COUNT(*) FROM iceberg.{schemaName}.multi_cmd_test"))
+            "SELECT COUNT(*) FROM multi_cmd_test"))
         {
             var count = cmd4.ExecuteScalar();
             Assert.Equal(1, Convert.ToInt64(count));
