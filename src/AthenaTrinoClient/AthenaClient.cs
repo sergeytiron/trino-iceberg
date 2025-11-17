@@ -172,6 +172,7 @@ public class AthenaClient : IAthenaClient
     /// Converts a FormattableString into a parameterized SQL query with ? placeholders
     /// and a list of QueryParameter objects. Only creates parameters for arguments that
     /// are not used as SQL identifiers (table names, schema names, etc.).
+    /// Parameters in FOR TIMESTAMP AS OF clauses are inlined as literals.
     /// </summary>
     private static (string Sql, List<QueryParameter> Parameters) ConvertFormattableStringToParameterizedQuery(
         FormattableString query
@@ -209,14 +210,100 @@ public class AthenaClient : IAthenaClient
             return (string.Format(format, arguments), new List<QueryParameter>());
         }
 
+        // Handle FOR TIMESTAMP AS OF and other time-travel clauses
+        // Time-travel queries cannot use prepared statements in Trino, so inline ALL parameters
+        var timeTravelPattern = @"FOR\s+(TIMESTAMP|SNAPSHOT|SYSTEM_TIME|VERSION)\s+AS\s+OF";
+        var hasTimeTravel = Regex.IsMatch(format, timeTravelPattern, RegexOptions.IgnoreCase);
+        
+        if (hasTimeTravel)
+        {
+            // Inline all parameters by formatting them as literals
+            // Check context: if parameter follows "TIMESTAMP" keyword, format as plain quoted string
+            // Otherwise use FormatParameterValue which adds type prefix
+            var inlinedArguments = new string[arguments.Length];
+            for (int i = 0; i < arguments.Length; i++)
+            {
+                var placeholder = $"{{{i}}}";
+                var placeholderIndex = format.IndexOf(placeholder);
+                
+                // Check if this parameter immediately follows TIMESTAMP keyword
+                var precedingText = placeholderIndex > 0 ? format.Substring(Math.Max(0, placeholderIndex - 20), Math.Min(20, placeholderIndex)) : "";
+                var followsTimestampKeyword = Regex.IsMatch(precedingText, @"TIMESTAMP\s*$", RegexOptions.IgnoreCase);
+                
+                if (followsTimestampKeyword && arguments[i] is DateTime dt)
+                {
+                    // Just format as quoted string since TIMESTAMP keyword is already there
+                    inlinedArguments[i] = $"'{dt:yyyy-MM-dd HH:mm:ss.fff}'";
+                }
+                else
+                {
+                    // Use full formatting with type prefix
+                    inlinedArguments[i] = FormatParameterValue(arguments[i]);
+                }
+            }
+            
+            var sql = string.Format(format, inlinedArguments);
+            
+            return (sql, new List<QueryParameter>());
+        }
+
         // Otherwise, create a parameterized query
         // Replace {0}, {1}, etc. with ? placeholders
-        var sql = Regex.Replace(format, @"\{(\d+)\}", "?");
+        var parameterizedSql = Regex.Replace(format, @"\{(\d+)\}", "?");
 
         // Convert arguments to QueryParameter objects
         var parameters = arguments.Select(arg => new QueryParameter(arg)).ToList();
 
-        return (sql, parameters);
+        return (parameterizedSql, parameters);
+    }
+
+    /// <summary>
+    /// Formats a parameter value as a SQL literal (mirrors QueryParameter.SqlExpressionValue logic).
+    /// </summary>
+    private static string FormatParameterValue(object? value)
+    {
+        if (value == null)
+        {
+            return "NULL";
+        }
+        else if (value is string str)
+        {
+            return $"'{str.Replace("'", "''")}'";
+        }
+        else if (value is DateTime dateTime)
+        {
+            return $"timestamp '{dateTime:yyyy-MM-dd HH:mm:ss.fff}'";
+        }
+        else if (value is DateTimeOffset offset)
+        {
+            return $"\"timestamp with time zone\" '{offset:yyyy-MM-dd HH:mm:ss.fff zzz}'";
+        }
+        else if (value is TimeSpan span)
+        {
+            return $"'{span:c}'";
+        }
+        else if (value is Guid)
+        {
+            return $"'{value}'";
+        }
+        else if (value is bool b)
+        {
+            return b ? "TRUE" : "FALSE";
+        }
+        else if (value is byte[] binary)
+        {
+            return $"X'{BitConverter.ToString(binary).Replace("-", "")}'";
+        }
+        else if (value is System.Collections.IEnumerable enumerable and not string)
+        {
+            var items = enumerable.Cast<object>()
+                .Select(item => FormatParameterValue(item));
+            return $"({string.Join(", ", items)})";
+        }
+        else
+        {
+            return value.ToString() ?? string.Empty;
+        }
     }
 
     /// <summary>

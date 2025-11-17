@@ -1,5 +1,4 @@
 using AthenaTrinoClient;
-using System.Runtime.CompilerServices;
 
 namespace IntegrationTests;
 
@@ -62,17 +61,12 @@ public class AthenaClientTests
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
-        // Filter timestamp (inline) that only includes snapshot 1 rows
+        // Filter timestamp that only includes snapshot 1 rows
         var filterUpperBound = new DateTime(2025, 11, 17, 10, 07, 00, DateTimeKind.Utc);
-        var timeTravelLiteral = timeTravelInstant.ToString("yyyy-MM-dd HH:mm:ss.fff");
-        var filterLiteral = filterUpperBound.ToString("yyyy-MM-dd HH:mm:ss.fff");
 
-        // Act - time travel query with all literals (no parameters to avoid mismatch)
+        // Act - time travel query with DateTime parameters (AthenaClient handles formatting)
         var results = client.Query<EventDto>(
-            FormattableStringFactory.Create(
-                $"SELECT event_id, event_type, event_time FROM events FOR TIMESTAMP AS OF TIMESTAMP '{timeTravelLiteral}' WHERE event_time < TIMESTAMP '{filterLiteral}' ORDER BY event_id",
-                Array.Empty<object>()
-            ),
+            $"SELECT event_id, event_type, event_time FROM events FOR TIMESTAMP AS OF TIMESTAMP {timeTravelInstant} WHERE event_time < {filterUpperBound} ORDER BY event_id",
             TestContext.Current.CancellationToken
         );
 
