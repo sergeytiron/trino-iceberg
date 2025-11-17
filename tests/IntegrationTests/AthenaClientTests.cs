@@ -1,4 +1,5 @@
 using AthenaTrinoClient;
+using System.Runtime.CompilerServices;
 
 namespace IntegrationTests;
 
@@ -24,6 +25,69 @@ public class AthenaClientTests
     private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
     #region Query<T> Tests
+
+    [Fact]
+    public async Task Query_TimeTravelToTimestamp_WithTimestampColumnFilter()
+    {
+        // Arrange
+        var schemaName = GetUniqueSchemaName("query_timetravel");
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE TABLE iceberg.{schemaName}.events (event_id bigint, event_type varchar, event_time timestamp) WITH (format='PARQUET')",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
+
+        // Snapshot 1 data
+        await Stack.ExecuteTrinoQueryAsync(
+            $"INSERT INTO iceberg.{schemaName}.events VALUES "
+                + "(1, 'login', TIMESTAMP '2025-11-17 10:00:00'), "
+                + "(2, 'click', TIMESTAMP '2025-11-17 10:05:00')",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
+
+        // Ensure a distinct commit time boundary
+        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        var timeTravelInstant = DateTime.UtcNow; // capture point between commits
+
+        // Snapshot 2 data (should not be visible when traveling to timeTravelInstant)
+        await Stack.ExecuteTrinoQueryAsync(
+            $"INSERT INTO iceberg.{schemaName}.events VALUES "
+                + "(3, 'purchase', TIMESTAMP '2025-11-17 10:10:00'), "
+                + "(4, 'logout', TIMESTAMP '2025-11-17 10:15:00')",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
+
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
+
+        // Filter timestamp (inline) that only includes snapshot 1 rows
+        var filterUpperBound = new DateTime(2025, 11, 17, 10, 07, 00, DateTimeKind.Utc);
+        var timeTravelLiteral = timeTravelInstant.ToString("yyyy-MM-dd HH:mm:ss.fff");
+        var filterLiteral = filterUpperBound.ToString("yyyy-MM-dd HH:mm:ss.fff");
+
+        // Act - time travel query with all literals (no parameters to avoid mismatch)
+        var results = client.Query<EventDto>(
+            FormattableStringFactory.Create(
+                $"SELECT event_id, event_type, event_time FROM events FOR TIMESTAMP AS OF TIMESTAMP '{timeTravelLiteral}' WHERE event_time < TIMESTAMP '{filterLiteral}' ORDER BY event_id",
+                Array.Empty<object>()
+            ),
+            TestContext.Current.CancellationToken
+        );
+
+        // Assert - only snapshot 1 rows are visible
+        Assert.Equal(2, results.Count);
+        Assert.Equal(1, results[0].EventId);
+        Assert.Equal("login", results[0].EventType);
+        Assert.Equal(2, results[1].EventId);
+        Assert.Equal("click", results[1].EventType);
+
+        // Ensure later snapshot rows are not present
+        Assert.DoesNotContain(results, r => r.EventId == 3 || r.EventId == 4);
+
+        _output.WriteLine($"Time travel to {timeTravelInstant:O} returned {results.Count} rows; snapshot 2 rows excluded as expected.");
+    }
 
     [Fact]
     public async Task Query_CanDeserializeSimpleTypes()
@@ -466,6 +530,13 @@ public class AthenaClientTests
     {
         public int Id { get; set; }
         public string Content { get; set; } = string.Empty;
+    }
+
+    public class EventDto
+    {
+        public long EventId { get; set; }
+        public string EventType { get; set; } = string.Empty;
+        public DateTime EventTime { get; set; }
     }
 
     #endregion
