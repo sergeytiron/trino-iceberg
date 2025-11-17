@@ -7,7 +7,7 @@
     <Project Path="lib/trino-csharp-client/trino-csharp/Trino.Data.ADO/Trino.Data.ADO.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/TrinoClient/TrinoClient.csproj" />
+    <Project Path="src/AthenaTrinoClient/AthenaTrinoClient.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IntegrationTests/IntegrationTests.csproj" />

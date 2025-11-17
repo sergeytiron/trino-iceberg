@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -9,5 +8,4 @@
   <ItemGroup>
     <ProjectReference Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
   </ItemGroup>
-
 </Project>
