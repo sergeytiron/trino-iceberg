@@ -217,9 +217,8 @@ public class AthenaClient : IAthenaClient
         
         if (hasTimeTravel)
         {
-            // Inline all parameters by formatting them as literals
+            // Inline all parameters by formatting them as literals using QueryParameter
             // Check context: if parameter follows "TIMESTAMP" keyword, format as plain quoted string
-            // Otherwise use FormatParameterValue which adds type prefix
             var inlinedArguments = new string[arguments.Length];
             for (int i = 0; i < arguments.Length; i++)
             {
@@ -237,8 +236,12 @@ public class AthenaClient : IAthenaClient
                 }
                 else
                 {
-                    // Use full formatting with type prefix
-                    inlinedArguments[i] = FormatParameterValue(arguments[i]);
+                    // Reuse QueryParameter's SqlExpressionValue via reflection
+                    var queryParam = new QueryParameter(arguments[i]);
+                    var sqlExpressionValue = typeof(QueryParameter)
+                        .GetProperty("SqlExpressionValue", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        ?.GetValue(queryParam) as string;
+                    inlinedArguments[i] = sqlExpressionValue ?? arguments[i]?.ToString() ?? "NULL";
                 }
             }
             
@@ -255,55 +258,6 @@ public class AthenaClient : IAthenaClient
         var parameters = arguments.Select(arg => new QueryParameter(arg)).ToList();
 
         return (parameterizedSql, parameters);
-    }
-
-    /// <summary>
-    /// Formats a parameter value as a SQL literal (mirrors QueryParameter.SqlExpressionValue logic).
-    /// </summary>
-    private static string FormatParameterValue(object? value)
-    {
-        if (value == null)
-        {
-            return "NULL";
-        }
-        else if (value is string str)
-        {
-            return $"'{str.Replace("'", "''")}'";
-        }
-        else if (value is DateTime dateTime)
-        {
-            return $"timestamp '{dateTime:yyyy-MM-dd HH:mm:ss.fff}'";
-        }
-        else if (value is DateTimeOffset offset)
-        {
-            return $"\"timestamp with time zone\" '{offset:yyyy-MM-dd HH:mm:ss.fff zzz}'";
-        }
-        else if (value is TimeSpan span)
-        {
-            return $"'{span:c}'";
-        }
-        else if (value is Guid)
-        {
-            return $"'{value}'";
-        }
-        else if (value is bool b)
-        {
-            return b ? "TRUE" : "FALSE";
-        }
-        else if (value is byte[] binary)
-        {
-            return $"X'{BitConverter.ToString(binary).Replace("-", "")}'";
-        }
-        else if (value is System.Collections.IEnumerable enumerable and not string)
-        {
-            var items = enumerable.Cast<object>()
-                .Select(item => FormatParameterValue(item));
-            return $"({string.Join(", ", items)})";
-        }
-        else
-        {
-            return value.ToString() ?? string.Empty;
-        }
     }
 
     /// <summary>
