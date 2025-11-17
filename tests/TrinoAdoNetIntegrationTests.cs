@@ -1,13 +1,12 @@
 using System.Data;
 using Trino.Data.ADO.Server;
-using Xunit.Abstractions;
 
 namespace TrinoIcebergTests;
 
 /// <summary>
 /// Integration tests for Trino ADO.NET provider against a real Trino stack
 /// </summary>
-public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixture>
+public class TrinoAdoNetIntegrationTests
 {
     private readonly ITestOutputHelper _output;
     private readonly TrinoIcebergStackFixture _fixture;
@@ -62,8 +61,8 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
         var schemaName = GetUniqueSchemaName("ado_test");
 
         // Act
-        using var command = new TrinoCommand(connection, 
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
+        using var command = new TrinoCommand(connection,
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}");
         command.ExecuteNonQuery();
 
         // Assert - query should complete without error
@@ -80,13 +79,13 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"))
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.test_table (id int, value varchar) WITH (format='PARQUET')"))
+            $"CREATE TABLE iceberg.{schemaName}.test_table (id int, value varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
@@ -98,7 +97,7 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
         }
 
         // Act
-        using var command = new TrinoCommand(connection, 
+        using var command = new TrinoCommand(connection,
             $"SELECT COUNT(*) FROM iceberg.{schemaName}.test_table");
         var result = command.ExecuteScalar();
 
@@ -119,13 +118,13 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"))
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.users (id int, name varchar, age int) WITH (format='PARQUET')"))
+            $"CREATE TABLE iceberg.{schemaName}.users (id int, name varchar, age int)"))
         {
             setupCmd.ExecuteNonQuery();
         }
@@ -137,7 +136,7 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
         }
 
         // Act
-        using var command = new TrinoCommand(connection, 
+        using var command = new TrinoCommand(connection,
             $"SELECT id, name, age FROM iceberg.{schemaName}.users ORDER BY id");
         using var reader = command.ExecuteReader();
 
@@ -149,9 +148,9 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
             var id = reader.GetInt32(0);
             var name = reader.GetString(1);
             var age = reader.GetInt32(2);
-            
+
             _output.WriteLine($"Row {rowCount}: ID={id}, Name={name}, Age={age}");
-            
+
             Assert.InRange(id, 1, 3);
             Assert.NotEmpty(name);
             Assert.InRange(age, 20, 40);
@@ -170,13 +169,13 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"))
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.schema_test (id int, name varchar, active boolean) WITH (format='PARQUET')"))
+            $"CREATE TABLE iceberg.{schemaName}.schema_test (id int, name varchar, active boolean)"))
         {
             setupCmd.ExecuteNonQuery();
         }
@@ -188,18 +187,18 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
         }
 
         // Act
-        using var command = new TrinoCommand(connection, 
+        using var command = new TrinoCommand(connection,
             $"SELECT * FROM iceberg.{schemaName}.schema_test");
         using var reader = command.ExecuteReader();
 
         // Assert
         Assert.Equal(3, reader.FieldCount);
-        
+
         // Check column names
         Assert.Equal("id", reader.GetName(0));
         Assert.Equal("name", reader.GetName(1));
         Assert.Equal("active", reader.GetName(2));
-        
+
         _output.WriteLine($"Schema: {reader.GetName(0)} ({reader.GetDataTypeName(0)}), " +
                          $"{reader.GetName(1)} ({reader.GetDataTypeName(1)}), " +
                          $"{reader.GetName(2)} ({reader.GetDataTypeName(2)})");
@@ -215,13 +214,13 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"))
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.null_test (id int, nullable_value varchar) WITH (format='PARQUET')"))
+            $"CREATE TABLE iceberg.{schemaName}.null_test (id int, nullable_value varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
@@ -233,7 +232,7 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
         }
 
         // Act
-        using var command = new TrinoCommand(connection, 
+        using var command = new TrinoCommand(connection,
             $"SELECT id, nullable_value FROM iceberg.{schemaName}.null_test ORDER BY id");
         using var reader = command.ExecuteReader();
 
@@ -259,13 +258,13 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
 
         // Setup
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"))
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.sales (amount bigint, category varchar) WITH (format='PARQUET')"))
+            $"CREATE TABLE iceberg.{schemaName}.sales (amount bigint, category varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
@@ -277,7 +276,7 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
         }
 
         // Act
-        using var command = new TrinoCommand(connection, 
+        using var command = new TrinoCommand(connection,
             $"SELECT category, SUM(amount) as total FROM iceberg.{schemaName}.sales GROUP BY category ORDER BY category");
         using var reader = command.ExecuteReader();
 
@@ -346,14 +345,14 @@ public class TrinoAdoNetIntegrationTests : IClassFixture<TrinoIcebergStackFixtur
 
         // Act & Assert - Execute multiple commands
         using (var cmd1 = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"))
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}"))
         {
             cmd1.ExecuteNonQuery();
             _output.WriteLine("Command 1: Schema created");
         }
 
         using (var cmd2 = new TrinoCommand(connection,
-            $"CREATE TABLE iceberg.{schemaName}.multi_cmd_test (value int) WITH (format='PARQUET')"))
+            $"CREATE TABLE iceberg.{schemaName}.multi_cmd_test (value int)"))
         {
             cmd2.ExecuteNonQuery();
             _output.WriteLine("Command 2: Table created");

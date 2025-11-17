@@ -1,11 +1,9 @@
-using Xunit.Abstractions;
-
 namespace TrinoIcebergTests;
 
 /// <summary>
 /// Integration tests for the Trino + Nessie + MinIO stack
 /// </summary>
-public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
+public class TrinoIcebergStackTests
 {
     private readonly ITestOutputHelper _output;
     private readonly TrinoIcebergStackFixture _fixture;
@@ -30,8 +28,7 @@ public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
         var schemaName = GetUniqueSchemaName("test_schema");
 
         // Act
-        var result = await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
+        var result = await Stack.ExecuteTrinoQueryAsync($"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         _output.WriteLine($"Result: {result}");
@@ -45,20 +42,16 @@ public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
         var schemaName = GetUniqueSchemaName("demo");
 
         // Create schema
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
+        await Stack.ExecuteTrinoQueryAsync($"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}", cancellationToken: TestContext.Current.CancellationToken);
 
         // Act - Create table
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.test_numbers (id int, name varchar) WITH (format='PARQUET')");
+        await Stack.ExecuteTrinoQueryAsync($"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.test_numbers (id int, name varchar)", cancellationToken: TestContext.Current.CancellationToken);
 
         // Act - Insert data
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')");
+        await Stack.ExecuteTrinoQueryAsync($"INSERT INTO iceberg.{schemaName}.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')", cancellationToken: TestContext.Current.CancellationToken);
 
         // Act - Query data
-        var result = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT * FROM iceberg.{schemaName}.test_numbers ORDER BY id");
+        var result = await Stack.ExecuteTrinoQueryAsync($"SELECT * FROM iceberg.{schemaName}.test_numbers ORDER BY id", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         _output.WriteLine($"Query result:\n{result}");
@@ -76,24 +69,19 @@ public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
         // Arrange
         var schemaName = GetUniqueSchemaName("analytics");
 
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
+        await Stack.ExecuteTrinoQueryAsync($"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}", cancellationToken: TestContext.Current.CancellationToken);
 
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.events (event_id bigint, event_type varchar, timestamp timestamp) WITH (format='PARQUET')");
+        await Stack.ExecuteTrinoQueryAsync($"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.events (event_id bigint, event_type varchar, timestamp timestamp)", cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.events VALUES " +
+        await Stack.ExecuteTrinoQueryAsync($"INSERT INTO iceberg.{schemaName}.events VALUES " +
             "(1, 'click', TIMESTAMP '2025-11-15 10:00:00'), " +
             "(2, 'view', TIMESTAMP '2025-11-15 10:05:00'), " +
-            "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')");
+            "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')", cancellationToken: TestContext.Current.CancellationToken);
 
-        var countResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT COUNT(*) as total FROM iceberg.{schemaName}.events");
+        var countResult = await Stack.ExecuteTrinoQueryAsync($"SELECT COUNT(*) as total FROM iceberg.{schemaName}.events", cancellationToken: TestContext.Current.CancellationToken);
 
-        var groupResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT event_type, COUNT(*) as count FROM iceberg.{schemaName}.events GROUP BY event_type ORDER BY event_type");
+        var groupResult = await Stack.ExecuteTrinoQueryAsync($"SELECT event_type, COUNT(*) as count FROM iceberg.{schemaName}.events GROUP BY event_type ORDER BY event_type", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         _output.WriteLine($"Count result: {countResult}");
@@ -111,11 +99,11 @@ public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
         using var client = new HttpClient();
 
         // Act
-        var response = await client.GetAsync($"{Stack.TrinoEndpoint}/v1/info");
+        var response = await client.GetAsync($"{Stack.TrinoEndpoint}/v1/info", TestContext.Current.CancellationToken);
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var content = await response.Content.ReadAsStringAsync();
+        var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         _output.WriteLine($"Trino info: {content}");
         Assert.Contains("\"starting\":false", content.ToLower());
     }
@@ -127,11 +115,11 @@ public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackFixture>
         using var client = new HttpClient();
 
         // Act
-        var response = await client.GetAsync($"{Stack.NessieEndpoint}/api/v2/config");
+        var response = await client.GetAsync($"{Stack.NessieEndpoint}/api/v2/config", TestContext.Current.CancellationToken);
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var content = await response.Content.ReadAsStringAsync();
+        var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         _output.WriteLine($"Nessie config: {content}");
         Assert.NotEmpty(content);
     }

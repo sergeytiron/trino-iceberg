@@ -23,7 +23,7 @@ try
         Catalog = catalog,
         Schema = schema
     };
-    
+
     var session = new ClientSession(sessionProperties: sessionProperties, auth: null);
 
     // Example 1: Create a schema
@@ -49,13 +49,13 @@ try
     // Example 4: Query data
     Console.WriteLine("Example 4: Querying data...");
     var executor = await RecordExecutor.Execute(session, $"SELECT * FROM {catalog}.{schemaName}.numbers ORDER BY id");
-    
+
     var results = new List<List<object>>();
     foreach (var row in executor)
     {
         results.Add(row);
     }
-    
+
     Console.WriteLine($"Found {results.Count} rows:");
     foreach (var row in results)
     {
@@ -71,7 +71,7 @@ try
     {
         countResults.Add(row);
     }
-    
+
     if (countResults.Count > 0 && countResults[0].Count > 0)
     {
         Console.WriteLine($"Total rows: {countResults[0][0]}");

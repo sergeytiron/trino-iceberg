@@ -1,22 +1,26 @@
+[assembly: AssemblyFixture(typeof(TrinoIcebergTests.TrinoIcebergStackFixture))]
+
 namespace TrinoIcebergTests;
 
 /// <summary>
-/// xUnit fixture that starts the Trino + Nessie + MinIO stack once and shares it across all tests
-/// in <see cref="TrinoIcebergStackTests"/> (and other test classes if converted to a collection fixture).
+/// xUnit 3 fixture that starts the Trino + Nessie + MinIO stack once and shares it across all tests.
+/// Uses AssemblyFixture for assembly-level sharing (xUnit 3 pattern).
 /// </summary>
-public class TrinoIcebergStackFixture : IAsyncLifetime
+public sealed class TrinoIcebergStackFixture : IAsyncLifetime
 {
     public TrinoIcebergStack Stack { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        // xUnit's IAsyncLifetime doesn't provide a cancellation token, but we use default
         Stack = new TrinoIcebergStack();
         await Stack.StartAsync(CancellationToken.None);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        await Stack.DisposeAsync();
+        if (Stack != null)
+        {
+            await Stack.DisposeAsync();
+        }
     }
 }
