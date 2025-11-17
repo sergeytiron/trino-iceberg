@@ -21,8 +21,7 @@ public class TrinoAdoNetIntegrationTests
     /// <summary>
     /// Generates a unique schema name for test isolation
     /// </summary>
-    private static string GetUniqueSchemaName(string baseName) =>
-        $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
+    private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
     /// <summary>
     /// Create a Trino connection with a specific schema
@@ -33,7 +32,7 @@ public class TrinoAdoNetIntegrationTests
         {
             Server = new Uri(Stack.TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = schemaName
+            Schema = schemaName,
         };
         return new TrinoConnection(properties);
     }
@@ -62,8 +61,7 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Act
-        using var command = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        using var command = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
         command.ExecuteNonQuery();
 
         // Assert - query should complete without error
@@ -79,27 +77,23 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Setup
-        using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
+        using (var setupCmd = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "CREATE TABLE test_table (id int, value varchar)"))
+        using (var setupCmd = new TrinoCommand(connection, "CREATE TABLE test_table (id int, value varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "INSERT INTO test_table VALUES (1, 'test')"))
+        using (var setupCmd = new TrinoCommand(connection, "INSERT INTO test_table VALUES (1, 'test')"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
-        using var command = new TrinoCommand(connection,
-            "SELECT COUNT(*) FROM test_table");
+        using var command = new TrinoCommand(connection, "SELECT COUNT(*) FROM test_table");
         var result = command.ExecuteScalar();
 
         // Assert
@@ -118,27 +112,28 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Setup
-        using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
+        using (var setupCmd = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "CREATE TABLE users (id int, name varchar, age int)"))
+        using (var setupCmd = new TrinoCommand(connection, "CREATE TABLE users (id int, name varchar, age int)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "INSERT INTO users VALUES (1, 'Alice', 30), (2, 'Bob', 25), (3, 'Charlie', 35)"))
+        using (
+            var setupCmd = new TrinoCommand(
+                connection,
+                "INSERT INTO users VALUES (1, 'Alice', 30), (2, 'Bob', 25), (3, 'Charlie', 35)"
+            )
+        )
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
-        using var command = new TrinoCommand(connection,
-            "SELECT id, name, age FROM users ORDER BY id");
+        using var command = new TrinoCommand(connection, "SELECT id, name, age FROM users ORDER BY id");
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -169,27 +164,28 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Setup
-        using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
+        using (var setupCmd = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "CREATE TABLE schema_test (id int, name varchar, active boolean)"))
+        using (
+            var setupCmd = new TrinoCommand(
+                connection,
+                "CREATE TABLE schema_test (id int, name varchar, active boolean)"
+            )
+        )
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "INSERT INTO schema_test VALUES (1, 'test', true)"))
+        using (var setupCmd = new TrinoCommand(connection, "INSERT INTO schema_test VALUES (1, 'test', true)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
-        using var command = new TrinoCommand(connection,
-            "SELECT * FROM schema_test");
+        using var command = new TrinoCommand(connection, "SELECT * FROM schema_test");
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -200,9 +196,11 @@ public class TrinoAdoNetIntegrationTests
         Assert.Equal("name", reader.GetName(1));
         Assert.Equal("active", reader.GetName(2));
 
-        _output.WriteLine($"Schema: {reader.GetName(0)} ({reader.GetDataTypeName(0)}), " +
-                         $"{reader.GetName(1)} ({reader.GetDataTypeName(1)}), " +
-                         $"{reader.GetName(2)} ({reader.GetDataTypeName(2)})");
+        _output.WriteLine(
+            $"Schema: {reader.GetName(0)} ({reader.GetDataTypeName(0)}), "
+                + $"{reader.GetName(1)} ({reader.GetDataTypeName(1)}), "
+                + $"{reader.GetName(2)} ({reader.GetDataTypeName(2)})"
+        );
     }
 
     [Fact]
@@ -214,33 +212,29 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Setup
-        using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
+        using (var setupCmd = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "CREATE TABLE null_test (id int, nullable_value varchar)"))
+        using (var setupCmd = new TrinoCommand(connection, "CREATE TABLE null_test (id int, nullable_value varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "INSERT INTO null_test VALUES (1, null), (2, 'not null')"))
+        using (var setupCmd = new TrinoCommand(connection, "INSERT INTO null_test VALUES (1, null), (2, 'not null')"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
-        using var command = new TrinoCommand(connection,
-            "SELECT id, nullable_value FROM null_test ORDER BY id");
+        using var command = new TrinoCommand(connection, "SELECT id, nullable_value FROM null_test ORDER BY id");
         using var reader = command.ExecuteReader();
 
         // Assert
         Assert.True(reader.Read());
         Assert.False(reader.IsDBNull(0)); // id should not be null
-        Assert.True(reader.IsDBNull(1));  // nullable_value should be null
+        Assert.True(reader.IsDBNull(1)); // nullable_value should be null
         _output.WriteLine($"Row 1: ID={reader.GetInt32(0)}, Value=NULL");
 
         Assert.True(reader.Read());
@@ -258,27 +252,31 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Setup
-        using (var setupCmd = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
+        using (var setupCmd = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "CREATE TABLE sales (amount bigint, category varchar)"))
+        using (var setupCmd = new TrinoCommand(connection, "CREATE TABLE sales (amount bigint, category varchar)"))
         {
             setupCmd.ExecuteNonQuery();
         }
 
-        using (var setupCmd = new TrinoCommand(connection,
-            "INSERT INTO sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')"))
+        using (
+            var setupCmd = new TrinoCommand(
+                connection,
+                "INSERT INTO sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')"
+            )
+        )
         {
             setupCmd.ExecuteNonQuery();
         }
 
         // Act
-        using var command = new TrinoCommand(connection,
-            "SELECT category, SUM(amount) as total FROM sales GROUP BY category ORDER BY category");
+        using var command = new TrinoCommand(
+            connection,
+            "SELECT category, SUM(amount) as total FROM sales GROUP BY category ORDER BY category"
+        );
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -307,7 +305,7 @@ public class TrinoAdoNetIntegrationTests
         {
             Server = new Uri(Stack.TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = schemaName
+            Schema = schemaName,
         };
         using var connection = new TrinoConnection(properties);
 
@@ -347,29 +345,25 @@ public class TrinoAdoNetIntegrationTests
         connection.Open();
 
         // Act & Assert - Execute multiple commands
-        using (var cmd1 = new TrinoCommand(connection,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
+        using (var cmd1 = new TrinoCommand(connection, $"CREATE SCHEMA IF NOT EXISTS {schemaName}"))
         {
             cmd1.ExecuteNonQuery();
             _output.WriteLine("Command 1: Schema created");
         }
 
-        using (var cmd2 = new TrinoCommand(connection,
-            "CREATE TABLE multi_cmd_test (value int)"))
+        using (var cmd2 = new TrinoCommand(connection, "CREATE TABLE multi_cmd_test (value int)"))
         {
             cmd2.ExecuteNonQuery();
             _output.WriteLine("Command 2: Table created");
         }
 
-        using (var cmd3 = new TrinoCommand(connection,
-            "INSERT INTO multi_cmd_test VALUES (42)"))
+        using (var cmd3 = new TrinoCommand(connection, "INSERT INTO multi_cmd_test VALUES (42)"))
         {
             cmd3.ExecuteNonQuery();
             _output.WriteLine("Command 3: Data inserted");
         }
 
-        using (var cmd4 = new TrinoCommand(connection,
-            "SELECT COUNT(*) FROM multi_cmd_test"))
+        using (var cmd4 = new TrinoCommand(connection, "SELECT COUNT(*) FROM multi_cmd_test"))
         {
             var count = cmd4.ExecuteScalar();
             Assert.Equal(1, Convert.ToInt64(count));

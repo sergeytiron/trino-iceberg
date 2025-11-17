@@ -19,8 +19,7 @@ internal static class TrinoConfigurationProvider
             node.data-dir=/data/trino
             """u8.ToArray();
 
-    public static byte[] GetLogPropertiesBytes() =>
-        """
+    public static byte[] GetLogPropertiesBytes() => """
             io.trino=INFO
             """u8.ToArray();
 

@@ -18,8 +18,7 @@ public class TrinoIcebergStackTests
     /// <summary>
     /// Generates a unique schema name for test isolation
     /// </summary>
-    private static string GetUniqueSchemaName(string baseName) =>
-        $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
+    private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
     [Fact]
     public async Task CanCreateSchemaInNessieCatalog()
@@ -28,7 +27,10 @@ public class TrinoIcebergStackTests
         var schemaName = GetUniqueSchemaName("test_schema");
 
         // Act
-        var result = await Stack.ExecuteTrinoQueryAsync($"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Assert
         _output.WriteLine($"Result: {result}");
@@ -42,16 +44,28 @@ public class TrinoIcebergStackTests
         var schemaName = GetUniqueSchemaName("demo");
 
         // Create schema
-        await Stack.ExecuteTrinoQueryAsync($"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}", cancellationToken: TestContext.Current.CancellationToken);
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Act - Create table
-        await Stack.ExecuteTrinoQueryAsync($"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.test_numbers (id int, name varchar)", cancellationToken: TestContext.Current.CancellationToken);
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.test_numbers (id int, name varchar)",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Act - Insert data
-        await Stack.ExecuteTrinoQueryAsync($"INSERT INTO iceberg.{schemaName}.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')", cancellationToken: TestContext.Current.CancellationToken);
+        await Stack.ExecuteTrinoQueryAsync(
+            $"INSERT INTO iceberg.{schemaName}.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Act - Query data
-        var result = await Stack.ExecuteTrinoQueryAsync($"SELECT * FROM iceberg.{schemaName}.test_numbers ORDER BY id", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await Stack.ExecuteTrinoQueryAsync(
+            $"SELECT * FROM iceberg.{schemaName}.test_numbers ORDER BY id",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Assert
         _output.WriteLine($"Query result:\n{result}");
@@ -69,19 +83,34 @@ public class TrinoIcebergStackTests
         // Arrange
         var schemaName = GetUniqueSchemaName("analytics");
 
-        await Stack.ExecuteTrinoQueryAsync($"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}", cancellationToken: TestContext.Current.CancellationToken);
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
-        await Stack.ExecuteTrinoQueryAsync($"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.events (event_id bigint, event_type varchar, timestamp timestamp)", cancellationToken: TestContext.Current.CancellationToken);
+        await Stack.ExecuteTrinoQueryAsync(
+            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.events (event_id bigint, event_type varchar, timestamp timestamp)",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Act
-        await Stack.ExecuteTrinoQueryAsync($"INSERT INTO iceberg.{schemaName}.events VALUES " +
-            "(1, 'click', TIMESTAMP '2025-11-15 10:00:00'), " +
-            "(2, 'view', TIMESTAMP '2025-11-15 10:05:00'), " +
-            "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')", cancellationToken: TestContext.Current.CancellationToken);
+        await Stack.ExecuteTrinoQueryAsync(
+            $"INSERT INTO iceberg.{schemaName}.events VALUES "
+                + "(1, 'click', TIMESTAMP '2025-11-15 10:00:00'), "
+                + "(2, 'view', TIMESTAMP '2025-11-15 10:05:00'), "
+                + "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
-        var countResult = await Stack.ExecuteTrinoQueryAsync($"SELECT COUNT(*) as total FROM iceberg.{schemaName}.events", cancellationToken: TestContext.Current.CancellationToken);
+        var countResult = await Stack.ExecuteTrinoQueryAsync(
+            $"SELECT COUNT(*) as total FROM iceberg.{schemaName}.events",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
-        var groupResult = await Stack.ExecuteTrinoQueryAsync($"SELECT event_type, COUNT(*) as count FROM iceberg.{schemaName}.events GROUP BY event_type ORDER BY event_type", cancellationToken: TestContext.Current.CancellationToken);
+        var groupResult = await Stack.ExecuteTrinoQueryAsync(
+            $"SELECT event_type, COUNT(*) as count FROM iceberg.{schemaName}.events GROUP BY event_type ORDER BY event_type",
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
         // Assert
         _output.WriteLine($"Count result: {countResult}");
@@ -115,7 +144,10 @@ public class TrinoIcebergStackTests
         using var client = new HttpClient();
 
         // Act
-        var response = await client.GetAsync($"{Stack.NessieEndpoint}/api/v2/config", TestContext.Current.CancellationToken);
+        var response = await client.GetAsync(
+            $"{Stack.NessieEndpoint}/api/v2/config",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         response.EnsureSuccessStatusCode();

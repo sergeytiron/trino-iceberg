@@ -20,8 +20,7 @@ public class TrinoClientIntegrationTests
     /// <summary>
     /// Generates a unique schema name for test isolation
     /// </summary>
-    private static string GetUniqueSchemaName(string baseName) =>
-        $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
+    private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
     /// <summary>
     /// Helper to execute a query and return results as a list
@@ -46,7 +45,7 @@ public class TrinoClientIntegrationTests
         {
             Server = new Uri(Stack.TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = schemaName
+            Schema = schemaName,
         };
         return new ClientSession(sessionProperties: sessionProperties, auth: null);
     }
@@ -59,8 +58,7 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Act
-        var results = await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        var results = await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
 
         // Assert
         _output.WriteLine($"Create schema results: {results.Count} rows");
@@ -75,20 +73,16 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Create schema
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
 
         // Act - Create table
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE test_data (id int, value varchar)");
+        await ExecuteQueryAsync(session, "CREATE TABLE test_data (id int, value varchar)");
 
         // Act - Insert data
-        await ExecuteQueryAsync(session,
-            "INSERT INTO test_data VALUES (100, 'test'), (200, 'data')");
+        await ExecuteQueryAsync(session, "INSERT INTO test_data VALUES (100, 'test'), (200, 'data')");
 
         // Assert - Query to verify
-        var results = await ExecuteQueryAsync(session,
-            "SELECT * FROM test_data ORDER BY id");
+        var results = await ExecuteQueryAsync(session, "SELECT * FROM test_data ORDER BY id");
 
         _output.WriteLine($"Query returned {results.Count} rows");
         Assert.Equal(2, results.Count);
@@ -112,16 +106,12 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Setup test data
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE numbers (n int)");
-        await ExecuteQueryAsync(session,
-            "INSERT INTO numbers VALUES (1), (2), (3), (4), (5)");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(session, "CREATE TABLE numbers (n int)");
+        await ExecuteQueryAsync(session, "INSERT INTO numbers VALUES (1), (2), (3), (4), (5)");
 
         // Act
-        var results = await ExecuteQueryAsync(session,
-            "SELECT n FROM numbers WHERE n > 2 ORDER BY n");
+        var results = await ExecuteQueryAsync(session, "SELECT n FROM numbers WHERE n > 2 ORDER BY n");
 
         // Assert
         _output.WriteLine($"Query returned {results.Count} rows");
@@ -139,16 +129,15 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Setup test data
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE sales (amount bigint, category varchar)");
-        await ExecuteQueryAsync(session,
-            "INSERT INTO sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(session, "CREATE TABLE sales (amount bigint, category varchar)");
+        await ExecuteQueryAsync(session, "INSERT INTO sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')");
 
         // Act
-        var results = await ExecuteQueryAsync(session,
-            "SELECT category, SUM(amount) as total FROM sales GROUP BY category ORDER BY category");
+        var results = await ExecuteQueryAsync(
+            session,
+            "SELECT category, SUM(amount) as total FROM sales GROUP BY category ORDER BY category"
+        );
 
         // Assert
         _output.WriteLine($"Aggregate query returned {results.Count} rows");
@@ -171,16 +160,12 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Setup test data
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE items (id int)");
-        await ExecuteQueryAsync(session,
-            "INSERT INTO items VALUES (1), (2), (3), (4), (5), (6), (7)");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(session, "CREATE TABLE items (id int)");
+        await ExecuteQueryAsync(session, "INSERT INTO items VALUES (1), (2), (3), (4), (5), (6), (7)");
 
         // Act
-        var results = await ExecuteQueryAsync(session,
-            "SELECT COUNT(*) as total FROM items");
+        var results = await ExecuteQueryAsync(session, "SELECT COUNT(*) as total FROM items");
 
         // Assert
         _output.WriteLine($"Count query returned {results.Count} rows");
@@ -197,14 +182,11 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Setup test data
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE empty_table (id int)");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(session, "CREATE TABLE empty_table (id int)");
 
         // Act
-        var results = await ExecuteQueryAsync(session,
-            "SELECT * FROM empty_table");
+        var results = await ExecuteQueryAsync(session, "SELECT * FROM empty_table");
 
         // Assert
         _output.WriteLine($"Empty query returned {results.Count} rows");
@@ -219,10 +201,8 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Setup
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE counter (value int)");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(session, "CREATE TABLE counter (value int)");
 
         // Act - Execute multiple inserts
         await ExecuteQueryAsync(session, "INSERT INTO counter VALUES (1)");
@@ -230,8 +210,7 @@ public class TrinoClientIntegrationTests
         await ExecuteQueryAsync(session, "INSERT INTO counter VALUES (3)");
 
         // Query final state
-        var results = await ExecuteQueryAsync(session,
-            "SELECT SUM(value) as total FROM counter");
+        var results = await ExecuteQueryAsync(session, "SELECT SUM(value) as total FROM counter");
 
         // Assert
         _output.WriteLine($"Sequential queries result: {results.Count} rows");
@@ -248,7 +227,8 @@ public class TrinoClientIntegrationTests
 
         // Act & Assert - TrinoAggregateException wraps TrinoException for query errors
         await Assert.ThrowsAsync<TrinoAggregateException>(async () =>
-            await ExecuteQueryAsync(session, "SELECT * FROM nonexistent.invalid.table"));
+            await ExecuteQueryAsync(session, "SELECT * FROM nonexistent.invalid.table")
+        );
     }
 
     [Fact]
@@ -259,16 +239,18 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(schemaName);
 
         // Setup test data with various types
-        await ExecuteQueryAsync(session,
-            $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
-        await ExecuteQueryAsync(session,
-            "CREATE TABLE mixed_types (id int, name varchar, amount bigint, active boolean)");
-        await ExecuteQueryAsync(session,
-            "INSERT INTO mixed_types VALUES (1, 'Alice', 1000, true), (2, 'Bob', 2000, false)");
+        await ExecuteQueryAsync(session, $"CREATE SCHEMA IF NOT EXISTS {schemaName}");
+        await ExecuteQueryAsync(
+            session,
+            "CREATE TABLE mixed_types (id int, name varchar, amount bigint, active boolean)"
+        );
+        await ExecuteQueryAsync(
+            session,
+            "INSERT INTO mixed_types VALUES (1, 'Alice', 1000, true), (2, 'Bob', 2000, false)"
+        );
 
         // Act
-        var results = await ExecuteQueryAsync(session,
-            "SELECT * FROM mixed_types ORDER BY id");
+        var results = await ExecuteQueryAsync(session, "SELECT * FROM mixed_types ORDER BY id");
 
         // Assert
         _output.WriteLine($"Mixed types query returned {results.Count} rows");

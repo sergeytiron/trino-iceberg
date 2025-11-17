@@ -1,29 +1,27 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
 
-    <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <IsPackable>false</IsPackable>
-        <OutputType>Exe</OutputType>
-    </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Testcontainers" Version="3.10.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.0" />
+    <PackageReference Include="xunit.v3.core" Version="3.2.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="6.0.4" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-        <PackageReference Include="Testcontainers" Version="3.10.0" />
-        <PackageReference Include="xunit.v3" Version="3.2.0" />
-        <PackageReference Include="xunit.v3.core" Version="3.2.0" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
-    </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <Using Include="Xunit" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <ProjectReference Include="..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
-      <ProjectReference Include="..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Trino.Data.ADO.csproj" />
-    </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
+    <ProjectReference Include="..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Trino.Data.ADO.csproj" />
+  </ItemGroup>
 </Project>

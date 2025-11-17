@@ -49,9 +49,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         _logger = logger;
 
         // Create a dedicated network for the containers
-        _network = new NetworkBuilder()
-            .WithName($"trino-test-{Guid.NewGuid():N}")
-            .Build();
+        _network = new NetworkBuilder().WithName($"trino-test-{Guid.NewGuid():N}").Build();
 
         // MinIO container with mc client included for bucket initialization
         _minioContainer = BuildMinioContainer(_network);
@@ -76,9 +74,10 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithCommand("server", "/data", "--console-address", $":{MinioConsolePort}")
             .WithPortBinding(MinioS3Port, true)
             .WithPortBinding(MinioConsolePort, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(MinioS3Port)
-                .ForPath("/minio/health/live")))
+            .WithWaitStrategy(
+                Wait.ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(r => r.ForPort(MinioS3Port).ForPath("/minio/health/live"))
+            )
             .Build();
     }
 
@@ -92,9 +91,10 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithEnvironment("QUARKUS_PROFILE", "prod")
             .WithEnvironment("NESSIE_VERSION_STORE_TYPE", "IN_MEMORY")
             .WithPortBinding(NessiePort, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPort(NessiePort)
-                .ForPath("/api/v2/config")))
+            .WithWaitStrategy(
+                Wait.ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(r => r.ForPort(NessiePort).ForPath("/api/v2/config"))
+            )
             .Build();
     }
 
@@ -110,7 +110,10 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithResourceMapping(TrinoConfigurationProvider.GetNodePropertiesBytes(), "/etc/trino/node.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetLogPropertiesBytes(), "/etc/trino/log.properties")
             .WithResourceMapping(TrinoConfigurationProvider.GetJvmConfigBytes(), "/etc/trino/jvm.config")
-            .WithResourceMapping(TrinoConfigurationProvider.GetIcebergCatalogPropertiesBytes(), "/etc/trino/catalog/iceberg.properties")
+            .WithResourceMapping(
+                TrinoConfigurationProvider.GetIcebergCatalogPropertiesBytes(),
+                "/etc/trino/catalog/iceberg.properties"
+            )
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("SERVER STARTED"))
             .Build();
     }
@@ -152,7 +155,8 @@ public class TrinoIcebergStack : IAsyncDisposable
     public async Task<string> ExecuteTrinoQueryAsync(
         string sql,
         TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -166,9 +170,9 @@ public class TrinoIcebergStack : IAsyncDisposable
 
         try
         {
-            var execResult = await _trinoContainer.ExecAsync(
-                ["trino", "--execute", sql],
-                linkedCts.Token).ConfigureAwait(false);
+            var execResult = await _trinoContainer
+                .ExecAsync(["trino", "--execute", sql], linkedCts.Token)
+                .ConfigureAwait(false);
 
             // Trino writes results to stdout and some messages to stderr
             var output = execResult.Stdout;
@@ -179,9 +183,12 @@ public class TrinoIcebergStack : IAsyncDisposable
 
             return output;
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException($"Query execution timed out after {timeout.Value.TotalSeconds} seconds. SQL: {sql}");
+            throw new TimeoutException(
+                $"Query execution timed out after {timeout.Value.TotalSeconds} seconds. SQL: {sql}"
+            );
         }
     }
 
@@ -231,17 +238,19 @@ public class TrinoIcebergStack : IAsyncDisposable
 
     private async Task InitializeMinIOBucketAsync(CancellationToken cancellationToken)
     {
-        var createBucketCommand = $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
+        var createBucketCommand =
+            $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
 
-        var createBucketResult = await _minioContainer.ExecAsync(
-            ["sh", "-c", createBucketCommand],
-            cancellationToken).ConfigureAwait(false);
+        var createBucketResult = await _minioContainer
+            .ExecAsync(["sh", "-c", createBucketCommand], cancellationToken)
+            .ConfigureAwait(false);
 
         if (createBucketResult.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"MinIO bucket initialization failed with exit code {createBucketResult.ExitCode}. " +
-                $"Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}");
+                $"MinIO bucket initialization failed with exit code {createBucketResult.ExitCode}. "
+                    + $"Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}"
+            );
         }
     }
 }
