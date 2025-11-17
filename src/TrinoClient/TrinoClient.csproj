@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
+  </ItemGroup>
+
 </Project>

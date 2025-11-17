@@ -23,5 +23,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
     <ProjectReference Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Trino.Data.ADO.csproj" />
+    <ProjectReference Include="..\..\src\TrinoClient\TrinoClient.csproj" />
   </ItemGroup>
 </Project>
