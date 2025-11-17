@@ -1,4 +1,4 @@
-namespace TrinoIcebergTests;
+namespace IntegrationTests;
 
 internal static class TrinoConfigurationProvider
 {

@@ -1,6 +1,6 @@
-[assembly: AssemblyFixture(typeof(TrinoIcebergTests.TrinoIcebergStackFixture))]
+[assembly: AssemblyFixture(typeof(IntegrationTests.TrinoIcebergStackFixture))]
 
-namespace TrinoIcebergTests;
+namespace IntegrationTests;
 
 /// <summary>
 /// xUnit 3 fixture that starts the Trino + Nessie + MinIO stack once and shares it across all tests.

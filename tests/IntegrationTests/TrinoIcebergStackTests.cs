@@ -1,4 +1,4 @@
-namespace TrinoIcebergTests;
+namespace IntegrationTests;
 
 /// <summary>
 /// Integration tests for the Trino + Nessie + MinIO stack

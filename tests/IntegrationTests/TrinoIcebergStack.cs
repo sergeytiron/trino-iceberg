@@ -2,7 +2,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 
-namespace TrinoIcebergTests;
+namespace IntegrationTests;
 
 /// <summary>
 /// Testcontainers implementation of the Trino + Nessie + MinIO stack

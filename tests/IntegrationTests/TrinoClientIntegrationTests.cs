@@ -1,6 +1,6 @@
 using Trino.Client;
 
-namespace TrinoIcebergTests;
+namespace IntegrationTests;
 
 /// <summary>
 /// Integration tests for official Trino.Client against a real Trino stack

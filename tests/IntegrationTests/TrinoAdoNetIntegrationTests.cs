@@ -1,7 +1,7 @@
 using System.Data;
 using Trino.Data.ADO.Server;
 
-namespace TrinoIcebergTests;
+namespace IntegrationTests;
 
 /// <summary>
 /// Integration tests for Trino ADO.NET provider against a real Trino stack
