@@ -39,13 +39,11 @@ public class AthenaClient : IAthenaClient
     /// <summary>
     /// Executes a SQL statement and returns the RecordExecutor for processing results.
     /// </summary>
-    /// <param name="sql">The SQL statement to execute.</param>
-    /// <param name="parameters">Optional query parameters.</param>
+    /// <param name="sql">The SQL statement to execute (with all parameters already inlined).</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>A RecordExecutor for processing query results.</returns>
     private RecordExecutor ExecuteStatement(
         string sql,
-        List<QueryParameter>? parameters = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -55,7 +53,7 @@ public class AthenaClient : IAthenaClient
                 queryStatusNotifications: null,
                 session: _session,
                 statement: sql,
-                queryParameters: parameters,
+                queryParameters: null,
                 bufferSize: Constants.DefaultBufferSizeBytes,
                 isQuery: true,
                 cancellationToken: cancellationToken
@@ -102,69 +100,6 @@ public class AthenaClient : IAthenaClient
     }
 
     /// <summary>
-    /// Checks if the query format contains parameters used in SQL value positions (WHERE, VALUES, etc.).
-    /// </summary>
-    private static bool HasValueParameters(string format)
-    {
-        var formatLower = format.ToLowerInvariant();
-        return formatLower.Contains(" where ")
-            || formatLower.Contains(" values ")
-            || formatLower.Contains(" set ")
-            || formatLower.Contains(" having ");
-    }
-
-    /// <summary>
-    /// Checks if the query format contains parameters used in identifier contexts (after FROM, INTO, etc.).
-    /// </summary>
-    private static bool HasIdentifierParameters(string format)
-    {
-        return Regex.IsMatch(
-            format,
-            @"(FROM|INTO|JOIN|TABLE)\s+[^{]*\{\d+\}",
-            RegexOptions.IgnoreCase
-        );
-    }
-
-    /// <summary>
-    /// Checks if the query format contains time-travel clauses (FOR TIMESTAMP AS OF, etc.).
-    /// </summary>
-    private static bool HasTimeTravel(string format)
-    {
-        var timeTravelPattern = @"FOR\s+(TIMESTAMP|SNAPSHOT|SYSTEM_TIME|VERSION)\s+AS\s+OF";
-        return Regex.IsMatch(format, timeTravelPattern, RegexOptions.IgnoreCase);
-    }
-
-    /// <summary>
-    /// Formats a parameter for inline use in a time-travel query.
-    /// </summary>
-    private static string FormatTimeTravelParameter(object argument, string format, int argumentIndex)
-    {
-        var placeholder = $"{{{argumentIndex}}}";
-        var placeholderIndex = format.IndexOf(placeholder);
-
-        // Check if this parameter immediately follows TIMESTAMP keyword
-        var precedingText = placeholderIndex > 0
-            ? format.Substring(Math.Max(0, placeholderIndex - 20), Math.Min(20, placeholderIndex))
-            : "";
-        var followsTimestampKeyword = Regex.IsMatch(precedingText, @"TIMESTAMP\s*$", RegexOptions.IgnoreCase);
-
-        if (followsTimestampKeyword && argument is DateTime dt)
-        {
-            // Just format as quoted string since TIMESTAMP keyword is already there
-            return $"'{dt:yyyy-MM-dd HH:mm:ss.fff}'";
-        }
-        else
-        {
-            // Reuse QueryParameter's SqlExpressionValue via reflection
-            var queryParam = new QueryParameter(argument);
-            var sqlExpressionValue = typeof(QueryParameter)
-                .GetProperty("SqlExpressionValue", BindingFlags.NonPublic | BindingFlags.Instance)
-                ?.GetValue(queryParam) as string;
-            return sqlExpressionValue ?? argument?.ToString() ?? "NULL";
-        }
-    }
-
-    /// <summary>
     /// Executes a parameterized query and returns results deserialized into a list of typed objects.
     /// </summary>
     /// <typeparam name="T">The type to deserialize each row into.</typeparam>
@@ -173,8 +108,8 @@ public class AthenaClient : IAthenaClient
     /// <returns>A list of deserialized objects of type T.</returns>
     public List<T> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
-        var (sql, parameters) = ConvertFormattableStringToParameterizedQuery(query);
-        var executor = ExecuteStatement(sql, parameters, cancellationToken);
+        var (sql, _) = ConvertFormattableStringToParameterizedQuery(query);
+        var executor = ExecuteStatement(sql, cancellationToken);
         return DeserializeResults<T>(executor, executor.Records.Columns);
     }
 
@@ -192,7 +127,7 @@ public class AthenaClient : IAthenaClient
         CancellationToken cancellationToken = default
     )
     {
-        var (sql, parameters) = ConvertFormattableStringToParameterizedQuery(query);
+        var (sql, _) = ConvertFormattableStringToParameterizedQuery(query);
 
         // Generate a unique table name for the export
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
@@ -208,14 +143,14 @@ public class AthenaClient : IAthenaClient
                 + $"WITH (location = '{absolutePath}', format = 'PARQUET') "
                 + $"AS {sql}";
 
-            var createExecutor = ExecuteStatement(createTableSql, parameters, cancellationToken);
+            var createExecutor = ExecuteStatement(createTableSql, cancellationToken);
             var rowCount = ExtractRowCountFromResult(createExecutor);
 
             // Step 2: Drop the temporary table (keeps the data files in S3)
             try
             {
                 var dropTableSql = $"DROP TABLE {exportTableName}";
-                var dropExecutor = ExecuteStatement(dropTableSql, null, cancellationToken);
+                var dropExecutor = ExecuteStatement(dropTableSql, cancellationToken);
 
                 // Consume the results
                 foreach (var _ in dropExecutor) { }
@@ -239,12 +174,10 @@ public class AthenaClient : IAthenaClient
     }
 
     /// <summary>
-    /// Converts a FormattableString into a parameterized SQL query with ? placeholders
-    /// and a list of QueryParameter objects. Only creates parameters for arguments that
-    /// are not used as SQL identifiers (table names, schema names, etc.).
-    /// Parameters in FOR TIMESTAMP AS OF clauses are inlined as literals.
+    /// Converts a FormattableString into a SQL query with all parameters inlined as literals.
+    /// This simplifies the query execution by avoiding prepared statements.
     /// </summary>
-    private static (string Sql, List<QueryParameter> Parameters) ConvertFormattableStringToParameterizedQuery(
+    private static (string Sql, List<QueryParameter>? Parameters) ConvertFormattableStringToParameterizedQuery(
         FormattableString query
     )
     {
@@ -254,37 +187,40 @@ public class AthenaClient : IAthenaClient
         // If there are no arguments, just return the format string
         if (arguments.Length == 0)
         {
-            return (format, new List<QueryParameter>());
+            return (format, null);
         }
 
-        // If parameters are only used as identifiers, format the string directly
-        if (HasIdentifierParameters(format) && !HasValueParameters(format))
+        // Inline all parameters as SQL literals using QueryParameter's formatting
+        var inlinedArguments = new string[arguments.Length];
+        for (int i = 0; i < arguments.Length; i++)
         {
-            return (string.Format(format, arguments), new List<QueryParameter>());
-        }
+            var placeholder = $"{{{i}}}";
+            var placeholderIndex = format.IndexOf(placeholder);
 
-        // Handle FOR TIMESTAMP AS OF and other time-travel clauses
-        // Time-travel queries cannot use prepared statements in Trino, so inline ALL parameters
-        if (HasTimeTravel(format))
-        {
-            var inlinedArguments = new string[arguments.Length];
-            for (int i = 0; i < arguments.Length; i++)
+            // Check if this parameter immediately follows TIMESTAMP keyword
+            var precedingText = placeholderIndex > 0
+                ? format.Substring(Math.Max(0, placeholderIndex - 20), Math.Min(20, placeholderIndex))
+                : "";
+            var followsTimestampKeyword = Regex.IsMatch(precedingText, @"TIMESTAMP\s*$", RegexOptions.IgnoreCase);
+
+            if (followsTimestampKeyword && arguments[i] is DateTime dt)
             {
-                inlinedArguments[i] = FormatTimeTravelParameter(arguments[i], format, i);
+                // Format as quoted string since TIMESTAMP keyword is already there
+                inlinedArguments[i] = $"'{dt:yyyy-MM-dd HH:mm:ss.fff}'";
             }
-
-            var sql = string.Format(format, inlinedArguments);
-            return (sql, new List<QueryParameter>());
+            else
+            {
+                // Use QueryParameter's SqlExpressionValue for proper SQL formatting
+                var queryParam = new QueryParameter(arguments[i]);
+                var sqlExpressionValue = typeof(QueryParameter)
+                    .GetProperty("SqlExpressionValue", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.GetValue(queryParam) as string;
+                inlinedArguments[i] = sqlExpressionValue ?? arguments[i]?.ToString() ?? "NULL";
+            }
         }
 
-        // Otherwise, create a parameterized query
-        // Replace {0}, {1}, etc. with ? placeholders
-        var parameterizedSql = Regex.Replace(format, @"\{(\d+)\}", "?");
-
-        // Convert arguments to QueryParameter objects
-        var parameters = arguments.Select(arg => new QueryParameter(arg)).ToList();
-
-        return (parameterizedSql, parameters);
+        var sql = string.Format(format, inlinedArguments);
+        return (sql, null);
     }
 
     /// <summary>
