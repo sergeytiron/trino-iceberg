@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.RegularExpressions;
 using Trino.Client;
 
 namespace AthenaTrinoClient;
@@ -105,7 +104,7 @@ public class AthenaClient : IAthenaClient
     /// <returns>A list of deserialized objects of type T.</returns>
     public async Task<List<T>> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
-        var (sql, _) = ConvertFormattableStringToParameterizedQuery(query);
+        var sql = ConvertFormattableStringToParameterizedQuery(query);
         var executor = await ExecuteStatement(sql, cancellationToken);
         return DeserializeResults<T>(executor, executor.Records.Columns);
     }
@@ -124,7 +123,7 @@ public class AthenaClient : IAthenaClient
         CancellationToken cancellationToken = default
     )
     {
-        var (sql, _) = ConvertFormattableStringToParameterizedQuery(query);
+        var sql = ConvertFormattableStringToParameterizedQuery(query);
 
         // Generate a unique table name for the export
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
@@ -172,52 +171,39 @@ public class AthenaClient : IAthenaClient
 
     /// <summary>
     /// Converts a FormattableString into a SQL query with all parameters inlined as literals.
-    /// This simplifies the query execution by avoiding prepared statements.
     /// </summary>
-    private static (string Sql, List<QueryParameter>? Parameters) ConvertFormattableStringToParameterizedQuery(
-        FormattableString query
-    )
+    private static string ConvertFormattableStringToParameterizedQuery(FormattableString query)
     {
         var format = query.Format;
         var arguments = query.GetArguments();
 
-        // If there are no arguments, just return the format string
         if (arguments.Length == 0)
         {
-            return (format, null);
+            return format;
         }
 
-        // Inline all parameters as SQL literals using QueryParameter's formatting
-        var inlinedArguments = new string[arguments.Length];
+        var inlinedArguments = new object[arguments.Length];
         for (int i = 0; i < arguments.Length; i++)
         {
-            var placeholder = $"{{{i}}}";
-            var placeholderIndex = format.IndexOf(placeholder);
-
-            // Check if this parameter immediately follows TIMESTAMP keyword
-            var precedingText = placeholderIndex > 0
-                ? format.Substring(Math.Max(0, placeholderIndex - 20), Math.Min(20, placeholderIndex))
-                : "";
-            var followsTimestampKeyword = Regex.IsMatch(precedingText, @"TIMESTAMP\s*$", RegexOptions.IgnoreCase);
-
-            if (followsTimestampKeyword && arguments[i] is DateTime dt)
-            {
-                // Format as quoted string since TIMESTAMP keyword is already there
-                inlinedArguments[i] = $"'{dt:yyyy-MM-dd HH:mm:ss.fff}'";
-            }
-            else
-            {
-                // Use QueryParameter's SqlExpressionValue for proper SQL formatting
-                var queryParam = new QueryParameter(arguments[i]);
-                var sqlExpressionValue = typeof(QueryParameter)
-                    .GetProperty("SqlExpressionValue", BindingFlags.NonPublic | BindingFlags.Instance)
-                    ?.GetValue(queryParam) as string;
-                inlinedArguments[i] = sqlExpressionValue ?? arguments[i]?.ToString() ?? "NULL";
-            }
+            inlinedArguments[i] = FormatSqlValue(arguments[i]);
         }
 
-        var sql = string.Format(format, inlinedArguments);
-        return (sql, null);
+        return string.Format(format, inlinedArguments);
+    }
+
+    /// <summary>
+    /// Formats a value as a SQL literal for inline use in queries.
+    /// </summary>
+    private static string FormatSqlValue(object? value)
+    {
+        return value switch
+        {
+            null => "NULL",
+            DateTime dt => $"TIMESTAMP '{dt:yyyy-MM-dd HH:mm:ss.ffffff}'",
+            string str => $"'{str.Replace("'", "''")}'",
+            bool b => b ? "true" : "false",
+            _ => value.ToString() ?? "NULL"
+        };
     }
 
     /// <summary>
