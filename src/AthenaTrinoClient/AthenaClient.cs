@@ -42,24 +42,21 @@ public class AthenaClient : IAthenaClient
     /// <param name="sql">The SQL statement to execute (with all parameters already inlined).</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>A RecordExecutor for processing query results.</returns>
-    private RecordExecutor ExecuteStatement(
+    private async Task<RecordExecutor> ExecuteStatement(
         string sql,
         CancellationToken cancellationToken = default
     )
     {
-        return RecordExecutor
-            .Execute(
-                logger: null,
-                queryStatusNotifications: null,
-                session: _session,
-                statement: sql,
-                queryParameters: null,
-                bufferSize: Constants.DefaultBufferSizeBytes,
-                isQuery: true,
-                cancellationToken: cancellationToken
-            )
-            .GetAwaiter()
-            .GetResult();
+        return await RecordExecutor.Execute(
+            logger: null,
+            queryStatusNotifications: null,
+            session: _session,
+            statement: sql,
+            queryParameters: null,
+            bufferSize: Constants.DefaultBufferSizeBytes,
+            isQuery: true,
+            cancellationToken: cancellationToken
+        );
     }
 
     /// <summary>
@@ -106,10 +103,10 @@ public class AthenaClient : IAthenaClient
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>A list of deserialized objects of type T.</returns>
-    public List<T> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
+    public async Task<List<T>> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
         var (sql, _) = ConvertFormattableStringToParameterizedQuery(query);
-        var executor = ExecuteStatement(sql, cancellationToken);
+        var executor = await ExecuteStatement(sql, cancellationToken);
         return DeserializeResults<T>(executor, executor.Records.Columns);
     }
 
@@ -121,7 +118,7 @@ public class AthenaClient : IAthenaClient
     /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>An UnloadResponse containing the row count and absolute S3 path.</returns>
-    public UnloadResponse Unload(
+    public async Task<UnloadResponse> Unload(
         FormattableString query,
         string s3RelativePath,
         CancellationToken cancellationToken = default
@@ -143,14 +140,14 @@ public class AthenaClient : IAthenaClient
                 + $"WITH (location = '{absolutePath}', format = 'PARQUET') "
                 + $"AS {sql}";
 
-            var createExecutor = ExecuteStatement(createTableSql, cancellationToken);
+            var createExecutor = await ExecuteStatement(createTableSql, cancellationToken);
             var rowCount = ExtractRowCountFromResult(createExecutor);
 
             // Step 2: Drop the temporary table (keeps the data files in S3)
             try
             {
                 var dropTableSql = $"DROP TABLE {exportTableName}";
-                var dropExecutor = ExecuteStatement(dropTableSql, cancellationToken);
+                var dropExecutor = await ExecuteStatement(dropTableSql, cancellationToken);
 
                 // Consume the results
                 foreach (var _ in dropExecutor) { }
