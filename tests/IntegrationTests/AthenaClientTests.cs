@@ -65,7 +65,7 @@ public class AthenaClientTests
         var filterUpperBound = new DateTime(2025, 11, 17, 10, 07, 00, DateTimeKind.Utc);
 
         // Act - time travel query with DateTime parameters (AthenaClient handles formatting)
-        var results = client.Query<EventDto>(
+        var results = await client.Query<EventDto>(
             $"SELECT event_id, event_type, event_time FROM events FOR TIMESTAMP AS OF TIMESTAMP {timeTravelInstant} WHERE event_time < {filterUpperBound} ORDER BY event_id",
             TestContext.Current.CancellationToken
         );
@@ -104,7 +104,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
         // Act
-        var results = client.Query<PersonDto>(
+        var results = await client.Query<PersonDto>(
             $"SELECT id, name, age, active FROM people ORDER BY id",
             TestContext.Current.CancellationToken
         );
@@ -152,7 +152,7 @@ public class AthenaClientTests
 
         // Act - use parameterized query (protects against SQL injection)
         var userId = 2;
-        var results = client.Query<UserDto>(
+        var results = await client.Query<UserDto>(
             $"SELECT id, username FROM users WHERE id = {userId}",
             TestContext.Current.CancellationToken
         );
@@ -188,7 +188,7 @@ public class AthenaClientTests
         // Act
         var minPrice = 15.0;
         var inStock = true;
-        var results = client.Query<ProductDto>(
+        var results = await client.Query<ProductDto>(
             $"SELECT id, name, price, in_stock FROM products WHERE price > {minPrice} AND in_stock = {inStock} ORDER BY id",
             TestContext.Current.CancellationToken
         );
@@ -224,7 +224,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
         // Act
-        var results = client.Query<ContactDto>(
+        var results = await client.Query<ContactDto>(
             $"SELECT id, name, email, phone FROM contacts ORDER BY id",
             TestContext.Current.CancellationToken
         );
@@ -268,7 +268,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
         // Act
-        var results = client.Query<EmployeeDto>(
+        var results = await client.Query<EmployeeDto>(
             $"SELECT employee_id, first_name, last_name, hire_date FROM employees ORDER BY employee_id",
             TestContext.Current.CancellationToken
         );
@@ -299,7 +299,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
         // Act
-        var results = client.Query<ItemDto>(
+        var results = await client.Query<ItemDto>(
             $"SELECT id, name FROM items WHERE id > 1000",
             TestContext.Current.CancellationToken
         );
@@ -336,7 +336,7 @@ public class AthenaClientTests
         var exportPath = $"exports/{schemaName}";
 
         // Act
-        var response = client.Unload($"SELECT * FROM data", exportPath, TestContext.Current.CancellationToken);
+        var response = await client.Unload($"SELECT * FROM data", exportPath, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(3, response.RowCount);
@@ -375,7 +375,7 @@ public class AthenaClientTests
         var region = "North";
 
         // Act
-        var response = client.Unload(
+        var response = await client.Unload(
             $"SELECT * FROM sales WHERE region = {region}",
             exportPath,
             TestContext.Current.CancellationToken
@@ -415,7 +415,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
         // Act
-        var results = client.Query<MeasurementDto>(
+        var results = await client.Query<MeasurementDto>(
             $"SELECT id, value_int, value_double, value_decimal FROM measurements",
             TestContext.Current.CancellationToken
         );
@@ -451,7 +451,7 @@ public class AthenaClientTests
 
         // Act
         var searchTerm = "It's a test";
-        var results = client.Query<MessageDto>(
+        var results = await client.Query<MessageDto>(
             $"SELECT id, content FROM messages WHERE content = {searchTerm}",
             TestContext.Current.CancellationToken
         );

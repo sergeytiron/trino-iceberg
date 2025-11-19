@@ -1,5 +1,5 @@
+using System.Globalization;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using Trino.Client;
 
 namespace AthenaTrinoClient;
@@ -37,40 +37,79 @@ public class AthenaClient : IAthenaClient
         ) { }
 
     /// <summary>
+    /// Executes a SQL statement and returns the RecordExecutor for processing results.
+    /// </summary>
+    /// <param name="sql">The SQL statement to execute (with all parameters already inlined).</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>A RecordExecutor for processing query results.</returns>
+    private async Task<RecordExecutor> ExecuteStatement(
+        string sql,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await RecordExecutor.Execute(
+            logger: null,
+            queryStatusNotifications: null,
+            session: _session,
+            statement: sql,
+            queryParameters: null,
+            bufferSize: Constants.DefaultBufferSizeBytes,
+            isQuery: true,
+            cancellationToken: cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Deserializes query results into a list of typed objects.
+    /// </summary>
+    /// <typeparam name="T">The type to deserialize each row into.</typeparam>
+    /// <param name="executor">The RecordExecutor containing query results.</param>
+    /// <param name="columns">The column metadata from the query results.</param>
+    /// <returns>A list of deserialized objects of type T.</returns>
+    private List<T> DeserializeResults<T>(
+        RecordExecutor executor,
+        IList<Trino.Client.Model.StatementV1.TrinoColumn> columns
+    )
+    {
+        var results = new List<T>();
+        var propertyMap = CreateColumnToPropertyMap<T>(columns);
+
+        foreach (var row in executor)
+        {
+            results.Add(MapRowToObject<T>(row, propertyMap));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Extracts the row count from a query result (typically from CREATE TABLE AS or similar statements).
+    /// </summary>
+    /// <param name="executor">The RecordExecutor containing the result.</param>
+    /// <returns>The row count, or 0 if no count was found.</returns>
+    private int ExtractRowCountFromResult(RecordExecutor executor)
+    {
+        foreach (var row in executor)
+        {
+            if (row.Count > 0 && row[0] != null)
+            {
+                return Convert.ToInt32(row[0]);
+            }
+        }
+        return 0;
+    }
+
+    /// <summary>
     /// Executes a parameterized query and returns results deserialized into a list of typed objects.
     /// </summary>
     /// <typeparam name="T">The type to deserialize each row into.</typeparam>
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>A list of deserialized objects of type T.</returns>
-    public List<T> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
+    public async Task<List<T>> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
-        var (sql, parameters) = ConvertFormattableStringToParameterizedQuery(query);
-
-        var executor = RecordExecutor
-            .Execute(
-                logger: null,
-                queryStatusNotifications: null,
-                session: _session,
-                statement: sql,
-                queryParameters: parameters,
-                bufferSize: Constants.DefaultBufferSizeBytes,
-                isQuery: true,
-                cancellationToken: cancellationToken
-            )
-            .GetAwaiter()
-            .GetResult();
-
-        var results = new List<T>();
-        var columns = executor.Records.Columns;
-
-        foreach (var row in executor)
-        {
-            var instance = MapRowToObject<T>(row, columns);
-            results.Add(instance);
-        }
-
-        return results;
+        var sql = ConvertFormattableStringToParameterizedQuery(query);
+        var executor = await ExecuteStatement(sql, cancellationToken);
+        return DeserializeResults<T>(executor, executor.Records.Columns);
     }
 
     /// <summary>
@@ -81,19 +120,18 @@ public class AthenaClient : IAthenaClient
     /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>An UnloadResponse containing the row count and absolute S3 path.</returns>
-    public UnloadResponse Unload(
+    public async Task<UnloadResponse> Unload(
         FormattableString query,
         string s3RelativePath,
         CancellationToken cancellationToken = default
     )
     {
-        var (sql, parameters) = ConvertFormattableStringToParameterizedQuery(query);
+        var sql = ConvertFormattableStringToParameterizedQuery(query);
 
         // Generate a unique table name for the export
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         var guid = Guid.NewGuid().ToString("N").Substring(0, 8);
         var exportTableName = $"unload_temp_{timestamp}_{guid}";
-        var exportSchemaName = _session.Properties.Schema ?? "default";
         var absolutePath = $"s3://warehouse/{s3RelativePath}";
 
         try
@@ -104,48 +142,14 @@ public class AthenaClient : IAthenaClient
                 + $"WITH (location = '{absolutePath}', format = 'PARQUET') "
                 + $"AS {sql}";
 
-            var createExecutor = RecordExecutor
-                .Execute(
-                    logger: null,
-                    queryStatusNotifications: null,
-                    session: _session,
-                    statement: createTableSql,
-                    queryParameters: parameters,
-                    bufferSize: Constants.DefaultBufferSizeBytes,
-                    isQuery: true,
-                    cancellationToken: cancellationToken
-                )
-                .GetAwaiter()
-                .GetResult();
-
-            // Get row count from CREATE TABLE AS result
-            var rowCount = 0;
-            foreach (var row in createExecutor)
-            {
-                // CREATE TABLE AS returns the number of rows inserted
-                if (row.Count > 0 && row[0] != null)
-                {
-                    rowCount = Convert.ToInt32(row[0]);
-                }
-            }
+            var createExecutor = await ExecuteStatement(createTableSql, cancellationToken);
+            var rowCount = ExtractRowCountFromResult(createExecutor);
 
             // Step 2: Drop the temporary table (keeps the data files in S3)
             try
             {
                 var dropTableSql = $"DROP TABLE {exportTableName}";
-                var dropExecutor = RecordExecutor
-                    .Execute(
-                        logger: null,
-                        queryStatusNotifications: null,
-                        session: _session,
-                        statement: dropTableSql,
-                        queryParameters: null,
-                        bufferSize: Constants.DefaultBufferSizeBytes,
-                        isQuery: true,
-                        cancellationToken: cancellationToken
-                    )
-                    .GetAwaiter()
-                    .GetResult();
+                var dropExecutor = await ExecuteStatement(dropTableSql, cancellationToken);
 
                 // Consume the results
                 foreach (var _ in dropExecutor) { }
@@ -169,116 +173,89 @@ public class AthenaClient : IAthenaClient
     }
 
     /// <summary>
-    /// Converts a FormattableString into a parameterized SQL query with ? placeholders
-    /// and a list of QueryParameter objects. Only creates parameters for arguments that
-    /// are not used as SQL identifiers (table names, schema names, etc.).
-    /// Parameters in FOR TIMESTAMP AS OF clauses are inlined as literals.
+    /// Converts a FormattableString into a SQL query with all parameters inlined as literals.
     /// </summary>
-    private static (string Sql, List<QueryParameter> Parameters) ConvertFormattableStringToParameterizedQuery(
-        FormattableString query
-    )
+    private static string ConvertFormattableStringToParameterizedQuery(FormattableString query)
     {
         var format = query.Format;
         var arguments = query.GetArguments();
 
-        // If there are no arguments, just return the format string
         if (arguments.Length == 0)
         {
-            return (format, new List<QueryParameter>());
+            return format;
         }
 
-        // Check if this query uses parameters in SQL value positions (WHERE, VALUES, etc.)
-        // vs identifier positions (table names, schema names)
-        // For simplicity, detect common patterns that suggest identifier usage
-        var formatLower = format.ToLowerInvariant();
-        var hasValueParameters =
-            formatLower.Contains(" where ")
-            || formatLower.Contains(" values ")
-            || formatLower.Contains(" set ")
-            || formatLower.Contains(" having ");
-
-        // Check if parameters appear in identifier contexts (after FROM, INTO, etc.)
-        var hasIdentifierParameters = Regex.IsMatch(
-            format,
-            @"(FROM|INTO|JOIN|TABLE)\s+[^{]*\{\d+\}",
-            RegexOptions.IgnoreCase
-        );
-
-        // If parameters are only used as identifiers, format the string directly
-        if (hasIdentifierParameters && !hasValueParameters)
+        var inlinedArguments = new object[arguments.Length];
+        for (int i = 0; i < arguments.Length; i++)
         {
-            return (string.Format(format, arguments), new List<QueryParameter>());
+            // Check if this parameter is preceded by TIMESTAMP keyword
+            var placeholder = $"{{{i}}}";
+            var placeholderIndex = format.IndexOf(placeholder);
+            var precedingText = placeholderIndex > 10
+                ? format.Substring(placeholderIndex - 10, 10)
+                : format.Substring(0, placeholderIndex);
+            var followsTimestamp = precedingText.TrimEnd().EndsWith("TIMESTAMP", StringComparison.OrdinalIgnoreCase);
+
+            inlinedArguments[i] = FormatSqlValue(arguments[i], followsTimestamp);
         }
 
-        // Handle FOR TIMESTAMP AS OF and other time-travel clauses
-        // Time-travel queries cannot use prepared statements in Trino, so inline ALL parameters
-        var timeTravelPattern = @"FOR\s+(TIMESTAMP|SNAPSHOT|SYSTEM_TIME|VERSION)\s+AS\s+OF";
-        var hasTimeTravel = Regex.IsMatch(format, timeTravelPattern, RegexOptions.IgnoreCase);
-        
-        if (hasTimeTravel)
-        {
-            // Inline all parameters by formatting them as literals using QueryParameter
-            // Check context: if parameter follows "TIMESTAMP" keyword, format as plain quoted string
-            var inlinedArguments = new string[arguments.Length];
-            for (int i = 0; i < arguments.Length; i++)
-            {
-                var placeholder = $"{{{i}}}";
-                var placeholderIndex = format.IndexOf(placeholder);
-                
-                // Check if this parameter immediately follows TIMESTAMP keyword
-                var precedingText = placeholderIndex > 0 ? format.Substring(Math.Max(0, placeholderIndex - 20), Math.Min(20, placeholderIndex)) : "";
-                var followsTimestampKeyword = Regex.IsMatch(precedingText, @"TIMESTAMP\s*$", RegexOptions.IgnoreCase);
-                
-                if (followsTimestampKeyword && arguments[i] is DateTime dt)
-                {
-                    // Just format as quoted string since TIMESTAMP keyword is already there
-                    inlinedArguments[i] = $"'{dt:yyyy-MM-dd HH:mm:ss.fff}'";
-                }
-                else
-                {
-                    // Reuse QueryParameter's SqlExpressionValue via reflection
-                    var queryParam = new QueryParameter(arguments[i]);
-                    var sqlExpressionValue = typeof(QueryParameter)
-                        .GetProperty("SqlExpressionValue", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                        ?.GetValue(queryParam) as string;
-                    inlinedArguments[i] = sqlExpressionValue ?? arguments[i]?.ToString() ?? "NULL";
-                }
-            }
-            
-            var sql = string.Format(format, inlinedArguments);
-            
-            return (sql, new List<QueryParameter>());
-        }
-
-        // Otherwise, create a parameterized query
-        // Replace {0}, {1}, etc. with ? placeholders
-        var parameterizedSql = Regex.Replace(format, @"\{(\d+)\}", "?");
-
-        // Convert arguments to QueryParameter objects
-        var parameters = arguments.Select(arg => new QueryParameter(arg)).ToList();
-
-        return (parameterizedSql, parameters);
+        return string.Format(format, inlinedArguments);
     }
 
     /// <summary>
-    /// Maps a database row to an object of type T using reflection.
-    /// Properties are matched by name (case-insensitive).
+    /// Formats a value as a SQL literal for inline use in queries.
     /// </summary>
-    private static T MapRowToObject<T>(List<object> row, IList<Trino.Client.Model.StatementV1.TrinoColumn> columns)
+    /// <param name="value">The value to format.</param>
+    /// <param name="followsTimestamp">Whether this value immediately follows a TIMESTAMP keyword.</param>
+    private static string FormatSqlValue(object? value, bool followsTimestamp)
     {
-        var instance = Activator.CreateInstance<T>();
-        var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        return value switch
+        {
+            null => "NULL",
+            DateTime dt when followsTimestamp => $"'{dt:yyyy-MM-dd HH:mm:ss.ffffff}'",
+            DateTime dt => $"TIMESTAMP '{dt:yyyy-MM-dd HH:mm:ss.ffffff}'",
+            string str => $"'{str.Replace("'", "''")}'",
+            bool b => b ? "true" : "false",
+            decimal d => d.ToString(CultureInfo.InvariantCulture),
+            double d => d.ToString(CultureInfo.InvariantCulture),
+            float f => f.ToString(CultureInfo.InvariantCulture),
+            Guid g => $"'{g}'",
+            _ => value.ToString() ?? "NULL"
+        };
+    }
 
-        for (int i = 0; i < columns.Count && i < row.Count; i++)
+    /// <summary>
+    /// Creates a mapping between column indices and properties of type T.
+    /// </summary>
+    private static PropertyInfo?[] CreateColumnToPropertyMap<T>(IList<Trino.Client.Model.StatementV1.TrinoColumn> columns)
+    {
+        var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var map = new PropertyInfo?[columns.Count];
+
+        for (int i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
-            var value = row[i];
-
             // Find matching property (case-insensitive)
-            var property = properties.FirstOrDefault(p =>
+            map[i] = properties.FirstOrDefault(p =>
                 p.Name.Equals(column.name, StringComparison.OrdinalIgnoreCase)
-                || p.Name.Equals(ConvertSnakeCaseToPascalCase(column.name), StringComparison.OrdinalIgnoreCase)
+                || p.Name.Equals(TypeConversionUtilities.ConvertSnakeCaseToPascalCase(column.name), StringComparison.OrdinalIgnoreCase)
             );
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// Maps a database row to an object of type T using a pre-calculated property map.
+    /// </summary>
+    private static T MapRowToObject<T>(List<object> row, PropertyInfo?[] propertyMap)
+    {
+        var instance = Activator.CreateInstance<T>();
+
+        for (int i = 0; i < propertyMap.Length && i < row.Count; i++)
+        {
+            var property = propertyMap[i];
+            var value = row[i];
 
             if (property != null && property.CanWrite)
             {
@@ -287,7 +264,7 @@ public class AthenaClient : IAthenaClient
                     if (value == null || value == DBNull.Value)
                     {
                         // Handle nullable types
-                        if (IsNullableType(property.PropertyType))
+                        if (TypeConversionUtilities.IsNullableType(property.PropertyType))
                         {
                             property.SetValue(instance, null);
                         }
@@ -295,25 +272,14 @@ public class AthenaClient : IAthenaClient
                     }
                     else
                     {
-                        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-
-                        // Direct assignment if types match
-                        if (targetType.IsAssignableFrom(value.GetType()))
-                        {
-                            property.SetValue(instance, value);
-                        }
-                        // Convert if needed
-                        else
-                        {
-                            var convertedValue = Convert.ChangeType(value, targetType);
-                            property.SetValue(instance, convertedValue);
-                        }
+                        var convertedValue = TypeConversionUtilities.ConvertValue(value, property.PropertyType);
+                        property.SetValue(instance, convertedValue);
                     }
                 }
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException(
-                        $"Failed to map column '{column.name}' (type: {column.type}) to property '{property.Name}' (type: {property.PropertyType.Name}). Value: {value}",
+                        $"Failed to map column at index {i} to property '{property.Name}' (type: {property.PropertyType.Name}). Value: {value}",
                         ex
                     );
                 }
@@ -321,30 +287,5 @@ public class AthenaClient : IAthenaClient
         }
 
         return instance;
-    }
-
-    /// <summary>
-    /// Converts snake_case to PascalCase for property name matching.
-    /// </summary>
-    private static string ConvertSnakeCaseToPascalCase(string snakeCase)
-    {
-        if (string.IsNullOrEmpty(snakeCase))
-            return snakeCase;
-
-        var parts = snakeCase.Split('_');
-        var result = string.Join(
-            "",
-            parts.Select(p => p.Length > 0 ? char.ToUpperInvariant(p[0]) + p.Substring(1).ToLowerInvariant() : p)
-        );
-
-        return result;
-    }
-
-    /// <summary>
-    /// Checks if a type is nullable (either a reference type or Nullable<T>).
-    /// </summary>
-    private static bool IsNullableType(Type type)
-    {
-        return !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
     }
 }

@@ -11,12 +11,19 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   mc:
     image: minio/mc:latest
     container_name: mc-init
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: >-
       sh -c "
       until (/usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin) do echo 'Waiting for MinIO...' && sleep 2; done &&
@@ -35,19 +42,35 @@ services:
     ports:
       - "19120:19120"
     depends_on:
-      - minio
-      - mc
+      minio:
+        condition: service_healthy
+      mc:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19120/api/v2/config"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
 
   trino:
     image: trinodb/trino:478
     container_name: trino
     depends_on:
-      - nessie
-      - minio
+      nessie:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
       - ./trino/etc:/etc/trino:ro
+    healthcheck:
+      test: ["CMD", "trino", "--execute", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   minio_data: {}

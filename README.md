@@ -1,6 +1,14 @@
 # Trino + Iceberg + Nessie + MinIO (Docker Compose)
 
-Minimal local stack: Trino queries Iceberg tables via the Nessie catalog; table data lives in MinIO object storage.
+Minimal local stack for **integration testing with AWS Athena**: Trino queries Iceberg tables via the Nessie catalog with table data in MinIO object storage, providing a local environment that mirrors AWS Athena's architecture.
+
+## Purpose
+
+This project provides a local development and testing environment that replicates AWS Athena's infrastructure for integration testing:
+
+- **AWS Athena** uses Trino as its query engine, Iceberg for table format, and S3 for storage
+- **This stack** uses the same components locally: Trino + Iceberg + MinIO (S3-compatible storage)
+- **AthenaClient** provides an Athena-compatible API for C# applications with type-safe querying and UNLOAD functionality
 
 ## Services
 - Trino: `trinodb/trino:478` on `localhost:8080`
@@ -141,11 +149,77 @@ dotnet run
 
 For detailed documentation, see the [official Trino C# Client documentation](https://github.com/trinodb/trino-csharp-client).
 
+## AthenaClient (AWS Athena Integration Testing)
+
+The `AthenaClient` is a high-level wrapper around the Trino C# Client designed for integration testing with AWS Athena. It provides an Athena-compatible API with additional features:
+
+### Key Features
+
+- **Type-safe querying**: Deserialize query results directly into C# objects
+- **FormattableString parameterization**: Use C# string interpolation with automatic SQL escaping
+- **AWS Athena UNLOAD support**: Export query results to S3 in Parquet format
+- **Time-travel queries**: Query Iceberg table snapshots using `FOR TIMESTAMP AS OF`
+- **Snake_case to PascalCase mapping**: Automatic conversion of database column names to C# property names
+- **Async/await support**: All methods are fully asynchronous
+
+### Quick Example
+
+```csharp
+using AthenaTrinoClient;
+
+// Create an AthenaClient
+var client = new AthenaClient(
+    trinoEndpoint: new Uri("http://localhost:8080"),
+    catalog: "iceberg",
+    schema: "demo"
+);
+
+// Type-safe query with parameterization
+var userId = 123;
+var results = await client.Query<User>(
+    $"SELECT id, name, email FROM users WHERE id = {userId}"
+);
+
+// UNLOAD query results to S3
+var response = await client.Unload(
+    query: $"SELECT * FROM orders WHERE created_at > {DateTime.UtcNow.AddDays(-7)}",
+    s3RelativePath: "exports/recent_orders"
+);
+
+Console.WriteLine($"Exported {response.RowCount} rows to {response.S3AbsolutePath}");
+```
+
+### Testing Against Production
+
+Since AWS Athena uses Trino as its query engine with Iceberg tables, this local stack provides an accurate testing environment:
+
+1. **Develop locally** against Trino + Iceberg + MinIO
+2. **Test integration** with the same query patterns and data formats
+3. **Deploy to AWS** where Athena uses the identical Trino + Iceberg stack with S3
+
+The `AthenaClient` API works identically in both environments, just change the endpoint from `localhost:8080` to your AWS Athena endpoint.
+
+### Integration Tests
+
+See `tests/IntegrationTests/AthenaClientTests.cs` for comprehensive examples of:
+- Type-safe deserialization
+- Parameterized queries
+- Time-travel queries
+- UNLOAD operations
+- Null value handling
+- Snake_case column mapping
+
 ## File layout
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config
 - `trino/etc/catalog/iceberg.properties`: Iceberg catalog using Nessie + S3 (MinIO)
 - `lib/trino-csharp-client/`: Official Trino C# Client (git submodule)
+- `src/AthenaTrinoClient/`: AthenaClient library for AWS Athena integration testing
+  - `AthenaClient.cs`: Main client implementation with Query and Unload methods
+  - `IAthenaClient.cs`: Interface for AthenaClient
+  - `TypeConversionUtilities.cs`: Utilities for type conversion and mapping
+  - `UnloadResponse.cs`: Response model for UNLOAD operations
 - `examples/TrinoClientExample/`: Example console application demonstrating client usage
 - `tests/`: C# Testcontainers implementation with integration tests
+  - `IntegrationTests/AthenaClientTests.cs`: Comprehensive AthenaClient integration tests
 - `TrinoIcebergTests.slnx`: .NET solution file including client, example, and tests
