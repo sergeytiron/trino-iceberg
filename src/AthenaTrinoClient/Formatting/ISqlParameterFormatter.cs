@@ -1,6 +1,6 @@
 using System;
 
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Formatting;
 
 /// <summary>
 /// Interface for converting formattable strings into parameterized SQL queries.

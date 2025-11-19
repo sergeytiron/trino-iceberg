@@ -1,4 +1,4 @@
-using AthenaTrinoClient;
+using AthenaTrinoClient.Formatting;
 using System;
 using Xunit;
 

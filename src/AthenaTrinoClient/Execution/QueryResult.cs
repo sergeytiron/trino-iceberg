@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Trino.Client.Model.StatementV1;
 
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Execution;
 
 /// <summary>
 /// Represents the result of a query execution.

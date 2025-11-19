@@ -1,3 +1,7 @@
+using AthenaTrinoClient.Execution;
+using AthenaTrinoClient.Formatting;
+using AthenaTrinoClient.Mapping;
+using AthenaTrinoClient.Models;
 using System.Globalization;
 using System.Reflection;
 using Trino.Client;

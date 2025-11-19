@@ -1,4 +1,4 @@
-using AthenaTrinoClient;
+using AthenaTrinoClient.Mapping;
 using System;
 using System.Collections.Generic;
 using Trino.Client.Model.StatementV1;

@@ -1,4 +1,8 @@
 using AthenaTrinoClient;
+using AthenaTrinoClient.Execution;
+using AthenaTrinoClient.Formatting;
+using AthenaTrinoClient.Mapping;
+using AthenaTrinoClient.Models;
 using Moq;
 using System;
 using System.Collections.Generic;

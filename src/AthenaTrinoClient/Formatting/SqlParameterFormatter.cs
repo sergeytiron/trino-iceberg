@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Formatting;
 
 /// <summary>
 /// Default implementation of ISqlParameterFormatter.

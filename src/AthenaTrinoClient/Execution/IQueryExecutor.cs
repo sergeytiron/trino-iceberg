@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Trino.Client;
 
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Execution;
 
 /// <summary>
 /// Interface for executing Trino queries.

@@ -1,3 +1,5 @@
+using AthenaTrinoClient.Models;
+
 namespace AthenaTrinoClient;
 
 public interface IAthenaClient

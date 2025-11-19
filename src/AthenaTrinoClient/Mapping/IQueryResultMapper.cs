@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Trino.Client;
 
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Mapping;
 
 /// <summary>
 /// Interface for mapping query results to typed objects.

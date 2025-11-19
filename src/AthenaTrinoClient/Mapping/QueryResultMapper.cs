@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Trino.Client;
 
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Mapping;
 
 /// <summary>
 /// Default implementation of IQueryResultMapper.

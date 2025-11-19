@@ -1,4 +1,4 @@
-namespace AthenaTrinoClient;
+namespace AthenaTrinoClient.Mapping;
 
 /// <summary>
 /// Utility methods for type conversion and string manipulation.
