@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Trino.Client;
 
@@ -71,9 +72,11 @@ public class AthenaClient : IAthenaClient
     )
     {
         var results = new List<T>();
+        var propertyMap = CreateColumnToPropertyMap<T>(columns);
+
         foreach (var row in executor)
         {
-            results.Add(MapRowToObject<T>(row, columns));
+            results.Add(MapRowToObject<T>(row, propertyMap));
         }
         return results;
     }
@@ -213,29 +216,46 @@ public class AthenaClient : IAthenaClient
             DateTime dt => $"TIMESTAMP '{dt:yyyy-MM-dd HH:mm:ss.ffffff}'",
             string str => $"'{str.Replace("'", "''")}'",
             bool b => b ? "true" : "false",
+            decimal d => d.ToString(CultureInfo.InvariantCulture),
+            double d => d.ToString(CultureInfo.InvariantCulture),
+            float f => f.ToString(CultureInfo.InvariantCulture),
+            Guid g => $"'{g}'",
             _ => value.ToString() ?? "NULL"
         };
     }
 
     /// <summary>
-    /// Maps a database row to an object of type T using reflection.
-    /// Properties are matched by name (case-insensitive).
+    /// Creates a mapping between column indices and properties of type T.
     /// </summary>
-    private static T MapRowToObject<T>(List<object> row, IList<Trino.Client.Model.StatementV1.TrinoColumn> columns)
+    private static PropertyInfo?[] CreateColumnToPropertyMap<T>(IList<Trino.Client.Model.StatementV1.TrinoColumn> columns)
     {
-        var instance = Activator.CreateInstance<T>();
         var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var map = new PropertyInfo?[columns.Count];
 
-        for (int i = 0; i < columns.Count && i < row.Count; i++)
+        for (int i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
-            var value = row[i];
-
             // Find matching property (case-insensitive)
-            var property = properties.FirstOrDefault(p =>
+            map[i] = properties.FirstOrDefault(p =>
                 p.Name.Equals(column.name, StringComparison.OrdinalIgnoreCase)
                 || p.Name.Equals(TypeConversionUtilities.ConvertSnakeCaseToPascalCase(column.name), StringComparison.OrdinalIgnoreCase)
             );
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// Maps a database row to an object of type T using a pre-calculated property map.
+    /// </summary>
+    private static T MapRowToObject<T>(List<object> row, PropertyInfo?[] propertyMap)
+    {
+        var instance = Activator.CreateInstance<T>();
+
+        for (int i = 0; i < propertyMap.Length && i < row.Count; i++)
+        {
+            var property = propertyMap[i];
+            var value = row[i];
 
             if (property != null && property.CanWrite)
             {
@@ -259,7 +279,7 @@ public class AthenaClient : IAthenaClient
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException(
-                        $"Failed to map column '{column.name}' (type: {column.type}) to property '{property.Name}' (type: {property.PropertyType.Name}). Value: {value}",
+                        $"Failed to map column at index {i} to property '{property.Name}' (type: {property.PropertyType.Name}). Value: {value}",
                         ex
                     );
                 }
