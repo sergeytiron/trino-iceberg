@@ -65,7 +65,8 @@ public class AthenaClient : IAthenaClient
             parameterFormatter,
             resultMapper,
             queryExecutor
-        ) { }
+        )
+    { }
 
     /// <summary>
     /// Executes a SQL statement and returns the QueryResult for processing results.
@@ -138,9 +139,11 @@ public class AthenaClient : IAthenaClient
         {
             // Step 1: Create a temporary table with the query results location
             var createTableSql =
-                $"CREATE TABLE {exportTableName} "
-                + $"WITH (location = '{absolutePath}', format = 'PARQUET') "
-                + $"AS {sql}";
+                $"""
+                CREATE TABLE {exportTableName}
+                WITH (location = '{absolutePath}', format = 'PARQUET')
+                AS {sql}
+                """;
 
             var createExecutor = await ExecuteStatement(createTableSql, cancellationToken);
             var rowCount = ExtractRowCountFromResult(createExecutor);
