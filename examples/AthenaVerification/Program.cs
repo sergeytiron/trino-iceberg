@@ -1,4 +1,4 @@
-﻿using AthenaTrinoClient;
+using AthenaTrinoClient;
 using System.Globalization;
 
 Console.WriteLine("Starting AthenaClient Verification...");

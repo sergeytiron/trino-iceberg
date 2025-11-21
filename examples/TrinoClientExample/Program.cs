@@ -1,4 +1,4 @@
-﻿using Trino.Client;
+using Trino.Client;
 
 // Example usage of the official Trino C# Client
 // This demonstrates how to connect to a Trino server and execute queries
