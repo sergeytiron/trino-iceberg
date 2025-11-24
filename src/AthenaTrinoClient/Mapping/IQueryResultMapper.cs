@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using Trino.Client;
-
 namespace AthenaTrinoClient.Mapping;
 
 /// <summary>

@@ -2,8 +2,6 @@ using AthenaTrinoClient.Execution;
 using AthenaTrinoClient.Formatting;
 using AthenaTrinoClient.Mapping;
 using AthenaTrinoClient.Models;
-using System.Globalization;
-using System.Reflection;
 using Trino.Client;
 
 namespace AthenaTrinoClient;
@@ -17,26 +15,6 @@ public class AthenaClient : IAthenaClient
     private readonly ISqlParameterFormatter _parameterFormatter;
     private readonly IQueryResultMapper _resultMapper;
     private readonly IQueryExecutor _queryExecutor;
-
-    /// <summary>
-    /// Creates a new TrinoClient with the specified session properties.
-    /// </summary>
-    /// <param name="properties">The Trino client session properties.</param>
-    /// <param name="parameterFormatter">Optional SQL parameter formatter.</param>
-    /// <param name="resultMapper">Optional query result mapper.</param>
-    /// <param name="queryExecutor">Optional query executor.</param>
-    public AthenaClient(
-        ClientSessionProperties properties,
-        ISqlParameterFormatter? parameterFormatter = null,
-        IQueryResultMapper? resultMapper = null,
-        IQueryExecutor? queryExecutor = null
-    )
-    {
-        _session = new ClientSession(sessionProperties: properties, auth: null);
-        _parameterFormatter = parameterFormatter ?? new SqlParameterFormatter();
-        _resultMapper = resultMapper ?? new QueryResultMapper();
-        _queryExecutor = queryExecutor ?? new QueryExecutor();
-    }
 
     /// <summary>
     /// Creates a new TrinoClient with the specified connection parameters.
@@ -55,18 +33,20 @@ public class AthenaClient : IAthenaClient
         IQueryResultMapper? resultMapper = null,
         IQueryExecutor? queryExecutor = null
     )
-        : this(
-            new ClientSessionProperties
+    {
+        _session = new ClientSession(
+            sessionProperties: new ClientSessionProperties
             {
                 Server = trinoEndpoint,
                 Catalog = catalog,
-                Schema = schema,
+                Schema = schema
             },
-            parameterFormatter,
-            resultMapper,
-            queryExecutor
-        )
-    { }
+            auth: null
+        );
+        _parameterFormatter = parameterFormatter ?? new SqlParameterFormatter();
+        _resultMapper = resultMapper ?? new QueryResultMapper();
+        _queryExecutor = queryExecutor ?? new QueryExecutor();
+    }
 
     /// <summary>
     /// Executes a SQL statement and returns the QueryResult for processing results.

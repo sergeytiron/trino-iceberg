@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Trino.Client.Model.StatementV1;
 
 namespace AthenaTrinoClient.Execution;
