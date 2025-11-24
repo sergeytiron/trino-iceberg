@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
+    <ProjectReference Include="..\..\src\AthenaTrinoClient\AthenaTrinoClient.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
