@@ -6,18 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Include all Trino.Client source files -->
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\*.cs" Link="TrinoClient\%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Auth\*.cs" Link="TrinoClient\Auth\%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Logging\*.cs" Link="TrinoClient\Logging\%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Model\**\*.cs" Link="TrinoClient\Model\%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Types\*.cs" Link="TrinoClient\Types\%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Utils\*.cs" Link="TrinoClient\Utils\%(Filename)%(Extension)" />
+    <!-- Include all Trino.Client source files recursively, excluding build artifacts -->
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\**\*.cs" 
+             Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\obj\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\bin\**"
+             Link="TrinoClient\%(RecursiveDir)%(Filename)%(Extension)" />
     
-    <!-- Include all Trino.Data.ADO source files -->
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Server\*.cs" Link="TrinoDataADO\Server\%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Client\*.cs" Link="TrinoDataADO\Client\%(Filename)%(Extension)" />
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\*.cs" Link="TrinoDataADO\Utilities\%(Filename)%(Extension)" Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\TaskUtilities.cs" />
+    <!-- Include all Trino.Data.ADO source files recursively, excluding build artifacts and duplicate TaskUtilities -->
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\**\*.cs" 
+             Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\obj\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\bin\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\TaskUtilities.cs"
+             Link="TrinoDataADO\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
