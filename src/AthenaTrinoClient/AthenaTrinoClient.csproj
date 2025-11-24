@@ -6,6 +6,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Trino.Client.csproj" />
+    <!-- Include all Trino.Client source files -->
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\*.cs" Link="TrinoClient\%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Auth\*.cs" Link="TrinoClient\Auth\%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Logging\*.cs" Link="TrinoClient\Logging\%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Model\**\*.cs" Link="TrinoClient\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Types\*.cs" Link="TrinoClient\Types\%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\Utils\*.cs" Link="TrinoClient\Utils\%(Filename)%(Extension)" />
+    
+    <!-- Include all Trino.Data.ADO source files -->
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Server\*.cs" Link="TrinoDataADO\Server\%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Client\*.cs" Link="TrinoDataADO\Client\%(Filename)%(Extension)" />
+    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\*.cs" Link="TrinoDataADO\Utilities\%(Filename)%(Extension)" Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\TaskUtilities.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="1.1.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 </Project>
