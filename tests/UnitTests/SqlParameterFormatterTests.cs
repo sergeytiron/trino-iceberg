@@ -54,6 +54,15 @@ public class SqlParameterFormatterTests
     }
 
     [Fact]
+    public void ConvertFormattableStringToParameterizedQuery_DateTimeAfterTimestampKeyword_FormatsAsLiteral()
+    {
+        var dt = new DateTime(2023, 1, 1, 12, 0, 0);
+        FormattableString query = $"SELECT * FROM table WHERE created_at = TIMESTAMP {dt}";
+        var result = _formatter.ConvertFormattableStringToParameterizedQuery(query);
+        Assert.Equal("SELECT * FROM table WHERE created_at = TIMESTAMP '2023-01-01 12:00:00.000000'", result);
+    }
+
+    [Fact]
     public void ConvertFormattableStringToParameterizedQuery_NullArgument_FormatsAsNull()
     {
         string? name = null;
