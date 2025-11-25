@@ -21,7 +21,7 @@ public sealed class TrinoIcebergStackFixture : IAsyncLifetime
         Stack = new TrinoIcebergStack();
         await Stack.StartAsync(TestContext.Current.CancellationToken);
 
-        Stack.ExecuteSqlFast($"CREATE SCHEMA IF NOT EXISTS {CommonSchemaName}");
+        Stack.ExecuteNonQuery($"CREATE SCHEMA IF NOT EXISTS {CommonSchemaName}");
 
         // Consolidated tables (reduced from 9 to 4 tables + 1 per-test table)
         // shared_data: combines test_data, people, users, contacts, messages into one multi-purpose table
@@ -29,7 +29,7 @@ public sealed class TrinoIcebergStackFixture : IAsyncLifetime
         // employee_data: for snake_case column mapping + date type (formerly employees)
         // numeric_data: for numeric extremes + decimal (formerly measurements)
         // events_time_travel: kept separate as tests INSERT into it (not pre-populated)
-        Stack.ExecuteSqlBatchFast([
+        Stack.ExecuteBatch([
             @"CREATE TABLE IF NOT EXISTS shared_data (
                 id int,
                 value varchar,
@@ -49,7 +49,7 @@ public sealed class TrinoIcebergStackFixture : IAsyncLifetime
             "CREATE TABLE IF NOT EXISTS events_time_travel (event_id bigint, event_type varchar, event_time timestamp)"
         ], CommonSchemaName);
 
-        Stack.ExecuteSqlBatchFast([
+        Stack.ExecuteBatch([
             // shared_data combines multiple use cases:
             // - Rows 1-2: test_data pattern (id, value)
             // - Rows 1-3: people pattern (id, name, age, active)

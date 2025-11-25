@@ -10,14 +10,16 @@ C# Testcontainers implementation of the Trino + Nessie + MinIO stack for integra
 ## Project Structure
 
 - `TrinoIcebergStack.cs` - Main stack orchestration (mirrors docker-compose.yml)
-- `TrinoIcebergStackTests.cs` - Integration tests using the stack
-- `TrinoIcebergTests.csproj` - Project file with NuGet references
+- `TrinoConfigurationProvider.cs` - Embedded Trino configuration (no external files needed)
+- `TrinoIcebergStackFixture.cs` - Shared fixture for test collection
+- `IntegrationTests.csproj` - Project file with NuGet references
 
 ## NuGet Packages
 
 - `Testcontainers` (3.10.0) - Container orchestration
 - `xunit` - Testing framework
 - `Microsoft.NET.Test.Sdk` - Test SDK
+- `Trino.Data.ADO` - Trino C# Client for ADO.NET queries
 
 ## Stack Components
 
@@ -26,7 +28,7 @@ The `TrinoIcebergStack` class manages:
 1. **Network** - Dedicated Docker network for container communication
 2. **MinIO** - Object storage on ports 9000 (API) and 9001 (console), with bucket initialization via exec
 3. **Nessie** - Iceberg catalog on port 19120
-4. **Trino** - Query engine on port 8080 with hardcoded configuration
+4. **Trino** - Query engine on port 8080 with embedded configuration
 
 ## Run Tests
 
@@ -56,42 +58,35 @@ dotnet.exe test --logger "console;verbosity=detailed"
 ## Example Usage
 
 ```csharp
-public class MyTests : IAsyncLifetime
+public class MyTests : IClassFixture<TrinoIcebergStackFixture>
 {
-    private TrinoIcebergStack? _stack;
+    private readonly TrinoIcebergStack _stack;
 
-    public async Task InitializeAsync()
+    public MyTests(TrinoIcebergStackFixture fixture)
     {
-        _stack = new TrinoIcebergStack();
-        await _stack.StartAsync();
-    }
-
-    public async Task DisposeAsync()
-    {
-        if (_stack != null)
-            await _stack.DisposeAsync();
+        _stack = fixture.Stack;
     }
 
     [Fact]
     public async Task CanQueryIceberg()
     {
         // Create schema
-        await _stack!.ExecuteTrinoQueryAsync(
+        _stack.ExecuteNonQuery(
             "CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
 
         // Create table
-        await _stack.ExecuteTrinoQueryAsync(
+        _stack.ExecuteNonQuery(
             "CREATE TABLE iceberg.demo.numbers (n int) WITH (format='PARQUET')");
 
         // Insert data
-        await _stack.ExecuteTrinoQueryAsync(
+        _stack.ExecuteNonQuery(
             "INSERT INTO iceberg.demo.numbers VALUES (1), (2), (3)");
 
-        // Query
-        var result = await _stack.ExecuteTrinoQueryAsync(
-            "SELECT * FROM iceberg.demo.numbers ORDER BY n");
+        // Query using AthenaClient for type-safe results
+        var client = new AthenaClient(new Uri(_stack.TrinoEndpoint), "iceberg", "demo");
+        var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
 
-        Assert.Contains("\"1\"", result);
+        Assert.Equal(3, rows.Count);
     }
 }
 ```
@@ -101,41 +96,44 @@ public class MyTests : IAsyncLifetime
 ### `StartAsync()`
 Starts all containers in dependency order:
 1. Network
-2. MinIO
-3. mc-init (bucket creation)
-4. Nessie
-5. Trino
+2. MinIO and Nessie (in parallel)
+3. MinIO bucket initialization and Trino startup (in parallel)
 
-### `ExecuteTrinoQueryAsync(string sql)`
-Executes SQL via Trino CLI and returns output (stdout and stderr combined).
+### Query Execution Methods (ADO.NET)
+
+#### `ExecuteNonQuery(string sql, string? schema = null)`
+Executes DDL/DML statements via ADO.NET. Returns rows affected.
+
+#### `ExecuteBatch(IEnumerable<string> sqlStatements, string? schema = null)`
+Executes multiple statements with connection reuse (parallel execution).
+
+> **Note**: For SELECT queries, use `AthenaClient` which provides type-safe deserialization.
 
 ### `DisposeAsync()`
 Stops and removes all containers and the network in reverse order of startup.
 
 ### Endpoint Properties
 - `TrinoEndpoint` - http://localhost:{mapped-port}
-- `NessieEndpoint` - http://localhost:{mapped-port}
 - `MinioEndpoint` - http://localhost:{mapped-port}
-- `MinioConsoleEndpoint` - http://localhost:{mapped-port}
 
 ## Notes
 
 - All containers use dynamic port mapping for parallel test execution
-- **Trino config files are hardcoded in C#** - no external files, copying, or mounting required
+- **Trino config files are embedded in C#** via `TrinoConfigurationProvider` - no external files needed
 - Configuration is completely self-contained within the test code
 - **MinIO bucket initialization uses exec** - no separate mc-init container needed
 - Proper wait strategies ensure containers are ready before tests run
-- Error messages include both stdout and stderr for better debugging
+- Uses ADO.NET via Trino C# Client for faster query execution than CLI
 - Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
 - Robust disposal continues cleanup even if individual containers fail
 - Network isolation prevents conflicts between test runs
-- Input validation on ExecuteTrinoQueryAsync prevents empty SQL queries
+- Use `TrinoIcebergStackFixture` with `[Collection("TrinoIcebergStack")]` for shared stack across tests
 
 ## Configuration
 
 ### Trino Configuration
 
-All Trino configuration is **hardcoded in the `TrinoIcebergStack` class** using C# string literals. No external configuration files, directories, or environment variables are needed. The configuration includes:
+All Trino configuration is **embedded in `TrinoConfigurationProvider.cs`** using C# string literals. No external configuration files, directories, or environment variables are needed. The configuration includes:
 
 - `config.properties` - Trino coordinator settings
 - `node.properties` - Node identification and data directory
@@ -143,7 +141,7 @@ All Trino configuration is **hardcoded in the `TrinoIcebergStack` class** using 
 - `jvm.config` - JVM settings for the Trino server
 - `catalog/iceberg.properties` - Iceberg connector with Nessie catalog and MinIO S3 settings
 
-To modify configuration, edit the `GetTrinoConfigBytes()` method in `TrinoIcebergStack.cs`.
+To modify configuration, edit the `Get*Bytes()` methods in `TrinoConfigurationProvider.cs`.
 
 ## Troubleshooting
 

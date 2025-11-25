@@ -89,9 +89,10 @@ dotnet test --logger "console;verbosity=detailed"
 ```
 
 Details:
-- Test stack lives in `tests/TrinoIcebergStack.cs` and mirrors the Compose services (dynamic ports, isolated network).
-- Trino config is embedded in code via `tests/TrinoConfigurationProvider.cs` and mapped into `/etc/trino/**`.
+- Test stack lives in `tests/IntegrationTests/TrinoIcebergStack.cs` and mirrors the Compose services (dynamic ports, isolated network).
+- Trino config is embedded in code via `tests/IntegrationTests/TrinoConfigurationProvider.cs` and mapped into `/etc/trino/**`.
 - MinIO bucket `warehouse` is created via `mc` executed inside the MinIO container (no extra container).
+- Query execution uses ADO.NET via the Trino C# Client (faster than CLI exec).
 
 ## Notes / Troubleshooting
 - Nessie uses in-memory storage by default (data lost on restart). For persistence, switch to `NESSIE_VERSION_STORE_TYPE=JDBC` and add Postgres config.

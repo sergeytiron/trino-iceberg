@@ -19,11 +19,6 @@ public class AthenaClientTests
         _classFixture = classFixture;
     }
 
-    /// <summary>
-    /// Generates a unique schema name for tests that need isolated schemas
-    /// </summary>
-    private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
-
     #region Query<T> Tests
 
     [Fact]
@@ -93,7 +88,7 @@ public class AthenaClientTests
     public async Task Query_TimeTravelToTimestamp_WithTimestampColumnFilter()
     {
         // Arrange
-        Stack.ExecuteSqlFast(
+        Stack.ExecuteNonQuery(
             // Snapshot 1 data
             "INSERT INTO events_time_travel VALUES (1, 'login', TIMESTAMP '2025-11-17 10:00:00'), (2, 'click', TIMESTAMP '2025-11-17 10:05:00')",
             SchemaName
@@ -104,7 +99,7 @@ public class AthenaClientTests
         var timeTravelInstant = DateTime.UtcNow; // capture point between commits
 
         // Snapshot 2 data (should not be visible when traveling to timeTravelInstant)
-        Stack.ExecuteSqlFast(
+        Stack.ExecuteNonQuery(
             "INSERT INTO events_time_travel VALUES (3, 'purchase', TIMESTAMP '2025-11-17 10:10:00'), (4, 'logout', TIMESTAMP '2025-11-17 10:15:00')",
             SchemaName
         );

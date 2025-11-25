@@ -140,13 +140,13 @@ public class TrinoIcebergStack : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes a SQL statement against Trino using ADO.NET (faster than CLI exec).
-    /// Use this for fixture setup and bulk operations.
+    /// Executes a SQL statement against Trino using ADO.NET.
+    /// Use this for DDL (CREATE, DROP) and DML (INSERT, UPDATE, DELETE) operations.
     /// </summary>
     /// <param name="sql">The SQL statement to execute</param>
     /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
-    /// <returns>Number of rows affected for DML, or -1 for DDL/queries</returns>
-    public int ExecuteSqlFast(string sql, string? schema = null)
+    /// <returns>Number of rows affected for DML, or -1 for DDL</returns>
+    public int ExecuteNonQuery(string sql, string? schema = null)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -167,80 +167,12 @@ public class TrinoIcebergStack : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes a SELECT query and returns results as a list of string arrays.
-    /// Each array represents a row, with values converted to strings.
-    /// </summary>
-    /// <param name="sql">The SQL SELECT query to execute</param>
-    /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
-    /// <returns>List of rows, where each row is an array of string values</returns>
-    public List<string[]> ExecuteQueryFast(string sql, string? schema = null)
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-        {
-            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
-        }
-
-        var properties = new TrinoConnectionProperties
-        {
-            Server = new Uri(TrinoEndpoint),
-            Catalog = "iceberg",
-            Schema = schema!
-        };
-
-        using var connection = new TrinoConnection(properties);
-        connection.Open();
-        using var command = new TrinoCommand(connection, sql);
-        using var reader = command.ExecuteReader();
-
-        var results = new List<string[]>();
-        var fieldCount = reader.FieldCount;
-
-        while (reader.Read())
-        {
-            var row = new string[fieldCount];
-            for (int i = 0; i < fieldCount; i++)
-            {
-                row[i] = reader.IsDBNull(i) ? "" : reader.GetValue(i)?.ToString() ?? "";
-            }
-            results.Add(row);
-        }
-
-        return results;
-    }
-
-    /// <summary>
-    /// Executes a SELECT query and returns a scalar value (first column of first row).
-    /// </summary>
-    /// <param name="sql">The SQL SELECT query to execute</param>
-    /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
-    /// <returns>The scalar value as object, or null if no rows returned</returns>
-    public object? ExecuteScalarFast(string sql, string? schema = null)
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-        {
-            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
-        }
-
-        var properties = new TrinoConnectionProperties
-        {
-            Server = new Uri(TrinoEndpoint),
-            Catalog = "iceberg",
-            Schema = schema!
-        };
-
-        using var connection = new TrinoConnection(properties);
-        connection.Open();
-        using var command = new TrinoCommand(connection, sql);
-        return command.ExecuteScalar();
-    }
-
-    /// <summary>
-    /// Executes multiple SQL statements sequentially using ADO.NET (faster than CLI exec).
-    /// Reuses a single connection for all statements.
+    /// Executes multiple SQL statements using ADO.NET with connection reuse.
+    /// Statements are executed in parallel for better performance.
     /// </summary>
     /// <param name="sqlStatements">The SQL statements to execute</param>
     /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
-    public void ExecuteSqlBatchFast(IEnumerable<string> sqlStatements, string? schema = null)
+    public void ExecuteBatch(IEnumerable<string> sqlStatements, string? schema = null)
     {
         var properties = new TrinoConnectionProperties
         {

@@ -19,11 +19,6 @@ public class TrinoClientIntegrationTests
     }
 
     /// <summary>
-    /// Generates a unique schema name for tests that need isolated schemas
-    /// </summary>
-    private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
-
-    /// <summary>
     /// Helper to execute a query and return results as a list
     /// </summary>
     private static async Task<List<List<object>>> ExecuteQueryAsync(ClientSession session, string sql)

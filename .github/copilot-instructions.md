@@ -25,19 +25,20 @@ Use this guide to work productively in this repo. It documents the architecture,
   - `dotnet test --logger "console;verbosity=detailed"`
 
 ## Test Stack Patterns (C# / Testcontainers)
-- Entry point: `tests/TrinoIcebergStack.cs` orchestrates network + 3 containers. Ports are dynamically mapped for parallel runs.
+- Entry point: `tests/IntegrationTests/TrinoIcebergStack.cs` orchestrates network + 3 containers. Ports are dynamically mapped for parallel runs.
 - Trino config is provided via in-memory bytes mapped into `/etc/trino/**` using `WithResourceMapping` from `TrinoConfigurationProvider`.
 - MinIO bucket init happens with `mc` via `Exec` in the MinIO container (no separate `mc` container):
   - `mc alias set local http://localhost:9000 ... && mc mb -p local/warehouse || true`
 - Shared fixture across tests:
   - `TrinoIcebergStackFixture` + `[Collection("TrinoIcebergStack")]` ensures one stack per test collection.
-- Query execution from tests uses Trino CLI inside the Trino container:
-  - `ExecuteTrinoQueryAsync("SQL...")` → runs `trino --execute <sql>` and returns combined stdout/stderr.
+- Query execution from tests uses ADO.NET via the Trino C# Client (faster than CLI exec):
+  - `ExecuteNonQuery("SQL...")` → executes DDL/DML and returns rows affected
+  - `ExecuteBatch(IEnumerable<string>)` → executes multiple statements with connection reuse
 
 ## Trino Configuration (Two Sources)
 - Compose mode uses files under `trino/etc/**`:
   - `config.properties`, `node.properties`, `log.properties`, `jvm.config`, `catalog/iceberg.properties`.
-- Test mode uses `tests/TrinoConfigurationProvider.cs` with equivalent content embedded as string literals.
+- Test mode uses `tests/IntegrationTests/TrinoConfigurationProvider.cs` with equivalent content embedded as string literals.
   - Modify `Get*Bytes()` methods to change Trino behavior for tests.
 
 ## Conventions and Gotchas
@@ -48,16 +49,18 @@ Use this guide to work productively in this repo. It documents the architecture,
 
 ## Example Test Flow
 ```csharp
-await Stack.ExecuteTrinoQueryAsync("CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
-await Stack.ExecuteTrinoQueryAsync("CREATE TABLE iceberg.demo.numbers (n int) WITH (format='PARQUET')");
-await Stack.ExecuteTrinoQueryAsync("INSERT INTO iceberg.demo.numbers VALUES (1),(2),(3)");
-var outText = await Stack.ExecuteTrinoQueryAsync("SELECT * FROM iceberg.demo.numbers ORDER BY n");
+Stack.ExecuteNonQuery("CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
+Stack.ExecuteNonQuery("CREATE TABLE iceberg.demo.numbers (n int) WITH (format='PARQUET')");
+Stack.ExecuteNonQuery("INSERT INTO iceberg.demo.numbers VALUES (1),(2),(3)");
+// Use AthenaClient for type-safe SELECT queries
+var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", "demo");
+var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
 ```
 
 ## Useful Paths
 - Compose configs: `trino/etc/**`
-- Test stack: `tests/TrinoIcebergStack.cs`, `tests/TrinoConfigurationProvider.cs`
-- Tests: `tests/TrinoIcebergStackTests.cs`, `tests/TrinoIcebergStackFixture.cs`, `tests/TrinoIcebergStackCollection.cs`
+- Test stack: `tests/IntegrationTests/TrinoIcebergStack.cs`, `tests/IntegrationTests/TrinoConfigurationProvider.cs`
+- Tests: `tests/IntegrationTests/`, `tests/UnitTests/`
 - Validation script: `validate.sh`
 
 If anything here is unclear or missing (e.g., adding JDBC-backed Nessie, auth, TLS), tell me what you’re trying to do and I’ll extend these instructions.
