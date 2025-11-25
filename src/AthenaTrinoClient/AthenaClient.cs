@@ -1,4 +1,3 @@
-using AthenaTrinoClient.Execution;
 using AthenaTrinoClient.Formatting;
 using AthenaTrinoClient.Mapping;
 using AthenaTrinoClient.Models;
@@ -12,9 +11,8 @@ namespace AthenaTrinoClient;
 public class AthenaClient : IAthenaClient
 {
     private readonly ClientSession _session;
-    private readonly ISqlParameterFormatter _parameterFormatter;
-    private readonly IQueryResultMapper _resultMapper;
-    private readonly IQueryExecutor _queryExecutor;
+    private readonly SqlParameterFormatter _parameterFormatter;
+    private readonly QueryResultMapper _resultMapper;
 
     /// <summary>
     /// Creates a new TrinoClient with the specified connection parameters.
@@ -22,17 +20,7 @@ public class AthenaClient : IAthenaClient
     /// <param name="trinoEndpoint">The Trino server endpoint URI.</param>
     /// <param name="catalog">The default catalog to use.</param>
     /// <param name="schema">The default schema to use.</param>
-    /// <param name="parameterFormatter">Optional SQL parameter formatter.</param>
-    /// <param name="resultMapper">Optional query result mapper.</param>
-    /// <param name="queryExecutor">Optional query executor.</param>
-    public AthenaClient(
-        Uri trinoEndpoint,
-        string catalog,
-        string schema,
-        ISqlParameterFormatter? parameterFormatter = null,
-        IQueryResultMapper? resultMapper = null,
-        IQueryExecutor? queryExecutor = null
-    )
+    public AthenaClient(Uri trinoEndpoint, string catalog, string schema)
     {
         _session = new ClientSession(
             sessionProperties: new ClientSessionProperties
@@ -43,40 +31,25 @@ public class AthenaClient : IAthenaClient
             },
             auth: null
         );
-        _parameterFormatter = parameterFormatter ?? new SqlParameterFormatter();
-        _resultMapper = resultMapper ?? new QueryResultMapper();
-        _queryExecutor = queryExecutor ?? new QueryExecutor();
+        _parameterFormatter = new SqlParameterFormatter();
+        _resultMapper = new QueryResultMapper();
     }
 
     /// <summary>
-    /// Executes a SQL statement and returns the QueryResult for processing results.
+    /// Executes a SQL statement and returns the record executor for processing results.
     /// </summary>
-    /// <param name="sql">The SQL statement to execute (with all parameters already inlined).</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    /// <returns>A QueryResult for processing query results.</returns>
-    private async Task<QueryResult> ExecuteStatement(
-        string sql,
-        CancellationToken cancellationToken = default
-    )
+    private async Task<RecordExecutor> ExecuteStatementAsync(string sql, CancellationToken cancellationToken = default)
     {
-        return await _queryExecutor.Execute(_session, sql, cancellationToken);
-    }
-
-    /// <summary>
-    /// Extracts the row count from a query result (typically from CREATE TABLE AS or similar statements).
-    /// </summary>
-    /// <param name="result">The QueryResult containing the result.</param>
-    /// <returns>The row count, or 0 if no count was found.</returns>
-    private int ExtractRowCountFromResult(QueryResult result)
-    {
-        foreach (var row in result.Rows)
-        {
-            if (row.Count > 0 && row[0] != null)
-            {
-                return Convert.ToInt32(row[0]);
-            }
-        }
-        return 0;
+        return await RecordExecutor.Execute(
+            logger: null,
+            queryStatusNotifications: null,
+            session: _session,
+            statement: sql,
+            queryParameters: null,
+            bufferSize: Constants.DefaultBufferSizeBytes,
+            isQuery: true,
+            cancellationToken: cancellationToken
+        );
     }
 
     /// <summary>
@@ -89,8 +62,8 @@ public class AthenaClient : IAthenaClient
     public async Task<List<T>> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
         var sql = _parameterFormatter.ConvertFormattableStringToParameterizedQuery(query);
-        var result = await ExecuteStatement(sql, cancellationToken);
-        return _resultMapper.DeserializeResults<T>(result.Rows, result.Columns);
+        var executor = await ExecuteStatementAsync(sql, cancellationToken);
+        return _resultMapper.DeserializeResults<T>(executor, executor.Records.Columns);
     }
 
     /// <summary>
@@ -125,22 +98,27 @@ public class AthenaClient : IAthenaClient
                 AS {sql}
                 """;
 
-            var createExecutor = await ExecuteStatement(createTableSql, cancellationToken);
-            var rowCount = ExtractRowCountFromResult(createExecutor);
+            var createExecutor = await ExecuteStatementAsync(createTableSql, cancellationToken);
+            
+            // Extract row count from first row
+            var rowCount = 0;
+            foreach (var row in createExecutor)
+            {
+                if (row.Count > 0 && row[0] != null)
+                {
+                    rowCount = Convert.ToInt32(row[0]);
+                    break;
+                }
+            }
 
             // Step 2: Drop the temporary table (keeps the data files in S3)
             try
             {
-                var dropTableSql = $"DROP TABLE {exportTableName}";
-                var dropExecutor = await ExecuteStatement(dropTableSql, cancellationToken);
-
-                // Consume the results
-                foreach (var _ in dropExecutor.Rows) { }
+                await ExecuteStatementAsync($"DROP TABLE {exportTableName}", cancellationToken);
             }
             catch
             {
-                // If drop fails, log but don't fail the operation
-                // The table will be cleaned up eventually
+                // If drop fails, the table will be cleaned up eventually
             }
 
             return new UnloadResponse(rowCount, absolutePath);

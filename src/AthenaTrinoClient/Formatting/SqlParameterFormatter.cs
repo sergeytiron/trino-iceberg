@@ -3,49 +3,39 @@ using System.Globalization;
 namespace AthenaTrinoClient.Formatting;
 
 /// <summary>
-/// Default implementation of ISqlParameterFormatter.
+/// Converts formattable strings into SQL queries with properly escaped and formatted parameter values.
 /// </summary>
-public class SqlParameterFormatter : ISqlParameterFormatter
+public class SqlParameterFormatter
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Converts a FormattableString into a SQL query with all parameters inlined as literals.
+    /// </summary>
     public string ConvertFormattableStringToParameterizedQuery(FormattableString query)
     {
-        var format = query.Format;
-        var arguments = query.GetArguments();
-
-        if (arguments.Length == 0)
+        if (query.ArgumentCount == 0)
         {
-            return format;
+            return query.Format;
         }
 
-        var inlinedArguments = new object[arguments.Length];
+        var arguments = query.GetArguments();
+        var formatted = new object[arguments.Length];
+        
         for (int i = 0; i < arguments.Length; i++)
         {
-            // Check if this parameter is preceded by TIMESTAMP keyword
-            var placeholder = $"{{{i}}}";
-            var placeholderIndex = format.IndexOf(placeholder);
-            var precedingText = placeholderIndex > 10
-                ? format.Substring(placeholderIndex - 10, 10)
-                : format.Substring(0, placeholderIndex);
-            var followsTimestamp = precedingText.TrimEnd().EndsWith("TIMESTAMP", StringComparison.OrdinalIgnoreCase);
-
-            inlinedArguments[i] = FormatSqlValue(arguments[i], followsTimestamp);
+            formatted[i] = FormatSqlValue(arguments[i]);
         }
 
-        return string.Format(format, inlinedArguments);
+        return string.Format(query.Format, formatted);
     }
 
     /// <summary>
-    /// Formats a value as a SQL literal for inline use in queries.
+    /// Formats a value as a SQL literal.
     /// </summary>
-    /// <param name="value">The value to format.</param>
-    /// <param name="followsTimestamp">Whether this value immediately follows a TIMESTAMP keyword.</param>
-    private static string FormatSqlValue(object? value, bool followsTimestamp)
+    private static string FormatSqlValue(object? value)
     {
         return value switch
         {
             null => "NULL",
-            DateTime dt when followsTimestamp => $"'{dt:yyyy-MM-dd HH:mm:ss.ffffff}'",
             DateTime dt => $"TIMESTAMP '{dt:yyyy-MM-dd HH:mm:ss.ffffff}'",
             string str => $"'{str.Replace("'", "''")}'",
             bool b => b ? "true" : "false",

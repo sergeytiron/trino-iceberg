@@ -1,94 +1,91 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using Trino.Client;
+using Trino.Client.Model.StatementV1;
 
 namespace AthenaTrinoClient.Mapping;
 
 /// <summary>
-/// Default implementation of IQueryResultMapper.
+/// Maps Trino query results to strongly-typed objects.
 /// </summary>
-public class QueryResultMapper : IQueryResultMapper
+public class QueryResultMapper
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Deserializes query results into a list of typed objects.
+    /// </summary>
     public List<T> DeserializeResults<T>(
         IEnumerable<List<object>> rows,
-        IList<Trino.Client.Model.StatementV1.TrinoColumn> columns
+        IList<TrinoColumn> columns
     )
     {
         var results = new List<T>();
-        var propertyMap = CreateColumnToPropertyMap<T>(columns);
-
-        foreach (var row in rows)
-        {
-            results.Add(MapRowToObject<T>(row, propertyMap));
-        }
-        return results;
-    }
-
-    /// <summary>
-    /// Creates a mapping between column indices and properties of type T.
-    /// </summary>
-    private static PropertyInfo?[] CreateColumnToPropertyMap<T>(IList<Trino.Client.Model.StatementV1.TrinoColumn> columns)
-    {
         var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        var map = new PropertyInfo?[columns.Count];
+        var propertyMap = new PropertyInfo?[columns.Count];
 
+        // Build column to property mapping
         for (int i = 0; i < columns.Count; i++)
         {
-            var column = columns[i];
-            // Find matching property (case-insensitive)
-            map[i] = properties.FirstOrDefault(p =>
-                p.Name.Equals(column.name, StringComparison.OrdinalIgnoreCase)
-                || p.Name.Equals(TypeConversionUtilities.ConvertSnakeCaseToPascalCase(column.name), StringComparison.OrdinalIgnoreCase)
+            var columnName = columns[i].name;
+            propertyMap[i] = properties.FirstOrDefault(p =>
+                p.Name.Equals(columnName, StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Equals(ConvertSnakeCaseToPascalCase(columnName), StringComparison.OrdinalIgnoreCase)
             );
         }
 
-        return map;
-    }
-
-    /// <summary>
-    /// Maps a database row to an object of type T using a pre-calculated property map.
-    /// </summary>
-    private static T MapRowToObject<T>(List<object> row, PropertyInfo?[] propertyMap)
-    {
-        var instance = Activator.CreateInstance<T>();
-
-        for (int i = 0; i < propertyMap.Length && i < row.Count; i++)
+        // Map each row to an object
+        foreach (var row in rows)
         {
-            var property = propertyMap[i];
-            var value = row[i];
+            var instance = Activator.CreateInstance<T>();
 
-            if (property != null && property.CanWrite)
+            for (int i = 0; i < propertyMap.Length && i < row.Count; i++)
             {
-                try
+                var property = propertyMap[i];
+                if (property == null || !property.CanWrite)
+                    continue;
+
+                var value = row[i];
+                if (value == null || value == DBNull.Value)
                 {
-                    if (value == null || value == DBNull.Value)
+                    if (IsNullable(property.PropertyType))
                     {
-                        // Handle nullable types
-                        if (TypeConversionUtilities.IsNullableType(property.PropertyType))
-                        {
-                            property.SetValue(instance, null);
-                        }
-                        // Skip setting value for non-nullable types with null database values
-                    }
-                    else
-                    {
-                        var convertedValue = TypeConversionUtilities.ConvertValue(value, property.PropertyType);
-                        property.SetValue(instance, convertedValue);
+                        property.SetValue(instance, null);
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    throw new InvalidOperationException(
-                        $"Failed to map column at index {i} to property '{property.Name}' (type: {property.PropertyType.Name}). Value: {value}",
-                        ex
-                    );
+                    try
+                    {
+                        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+                        var converted = targetType.IsAssignableFrom(value.GetType())
+                            ? value
+                            : Convert.ChangeType(value, targetType);
+                        property.SetValue(instance, converted);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException(
+                            $"Failed to map column '{columns[i].name}' to property '{property.Name}'. Value: {value}",
+                            ex
+                        );
+                    }
                 }
             }
+
+            results.Add(instance);
         }
 
-        return instance;
+        return results;
     }
+
+    private static string ConvertSnakeCaseToPascalCase(string snakeCase)
+    {
+        if (string.IsNullOrEmpty(snakeCase))
+            return snakeCase;
+
+        var parts = snakeCase.Split('_');
+        return string.Concat(parts.Select(p =>
+            p.Length > 0 ? char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant() : p
+        ));
+    }
+
+    private static bool IsNullable(Type type) =>
+        !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
 }
