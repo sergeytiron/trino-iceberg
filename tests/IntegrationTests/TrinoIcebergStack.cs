@@ -1,6 +1,8 @@
+using System.Data;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
+using Trino.Data.ADO.Server;
 
 namespace IntegrationTests;
 
@@ -114,13 +116,17 @@ public class TrinoIcebergStack : IAsyncDisposable
                 TrinoConfigurationProvider.GetIcebergCatalogPropertiesBytes(),
                 "/etc/trino/catalog/iceberg.properties"
             )
+            .WithResourceMapping(
+                TrinoConfigurationProvider.GetMemoryCatalogPropertiesBytes(),
+                "/etc/trino/catalog/memory.properties"
+            )
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("SERVER STARTED"))
             .Build();
     }
 
     /// <summary>
     /// Starts all containers in the stack in the correct dependency order:
-    /// Network → MinIO → MinIO bucket initialization → Nessie → Trino
+    /// Network → (MinIO + Nessie in parallel) → MinIO bucket initialization → Trino
     /// </summary>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -128,17 +134,17 @@ public class TrinoIcebergStack : IAsyncDisposable
         // Start network
         await _network.CreateAsync(cancellationToken).ConfigureAwait(false);
 
-        // Start MinIO first
-        await _minioContainer.StartAsync(cancellationToken).ConfigureAwait(false);
+        // Start MinIO and Nessie in parallel - they don't depend on each other
+        await Task.WhenAll(
+            _minioContainer.StartAsync(cancellationToken),
+            _nessieContainer.StartAsync(cancellationToken)
+        ).ConfigureAwait(false);
 
         // Initialize MinIO bucket using exec instead of a separate container
         // The MinIO container includes the mc client
         await InitializeMinIOBucketAsync(cancellationToken);
 
-        // Start Nessie
-        await _nessieContainer.StartAsync(cancellationToken).ConfigureAwait(false);
-
-        // Start Trino last
+        // Start Trino last - depends on both MinIO and Nessie being ready
         await _trinoContainer.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -189,6 +195,59 @@ public class TrinoIcebergStack : IAsyncDisposable
             throw new TimeoutException(
                 $"Query execution timed out after {timeout.Value.TotalSeconds} seconds. SQL: {sql}"
             );
+        }
+    }
+
+    /// <summary>
+    /// Executes a SQL statement against Trino using ADO.NET (faster than CLI exec).
+    /// Use this for fixture setup and bulk operations.
+    /// </summary>
+    /// <param name="sql">The SQL statement to execute</param>
+    /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
+    /// <returns>Number of rows affected for DML, or -1 for DDL/queries</returns>
+    public int ExecuteSqlFast(string sql, string? schema = null)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
+        }
+
+        var properties = new TrinoConnectionProperties
+        {
+            Server = new Uri(TrinoEndpoint),
+            Catalog = "iceberg",
+            Schema = schema!
+        };
+
+        using var connection = new TrinoConnection(properties);
+        connection.Open();
+        using var command = new TrinoCommand(connection, sql);
+        return command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Executes multiple SQL statements sequentially using ADO.NET (faster than CLI exec).
+    /// Reuses a single connection for all statements.
+    /// </summary>
+    /// <param name="sqlStatements">The SQL statements to execute</param>
+    /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
+    public void ExecuteSqlBatchFast(IEnumerable<string> sqlStatements, string? schema = null)
+    {
+        var properties = new TrinoConnectionProperties
+        {
+            Server = new Uri(TrinoEndpoint),
+            Catalog = "iceberg",
+            Schema = schema!
+        };
+
+        using var connection = new TrinoConnection(properties);
+        connection.Open();
+
+        foreach (var sql in sqlStatements)
+        {
+            if (string.IsNullOrWhiteSpace(sql)) continue;
+            using var command = new TrinoCommand(connection, sql);
+            command.ExecuteNonQuery();
         }
     }
 

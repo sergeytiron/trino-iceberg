@@ -3,23 +3,48 @@ using AthenaTrinoClient;
 namespace IntegrationTests;
 
 /// <summary>
+/// Class fixture for AthenaClientTests - uses the shared common schema from assembly fixture.
+/// No additional setup queries needed - reuses pre-populated test data.
+/// </summary>
+public sealed class AthenaClientTestsClassFixture : IAsyncLifetime
+{
+    private readonly TrinoIcebergStackFixture _stackFixture;
+    
+    /// <summary>
+    /// Uses the shared schema from assembly fixture - no separate schema creation needed.
+    /// </summary>
+    public string SchemaName => _stackFixture.CommonSchemaName;
+    public TrinoIcebergStack Stack => _stackFixture.Stack;
+
+    public AthenaClientTestsClassFixture(TrinoIcebergStackFixture stackFixture)
+    {
+        _stackFixture = stackFixture;
+    }
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+/// <summary>
 /// Integration tests for TrinoClient implementation against a real Trino stack.
 /// Tests Query&lt;T&gt; deserialization, Unload functionality, and FormattableString parameterization.
 /// </summary>
-public class AthenaClientTests
+public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
 {
     private readonly ITestOutputHelper _output;
-    private readonly TrinoIcebergStackFixture _fixture;
-    private TrinoIcebergStack Stack => _fixture.Stack;
+    private readonly AthenaClientTestsClassFixture _classFixture;
+    private TrinoIcebergStack Stack => _classFixture.Stack;
+    private string SchemaName => _classFixture.SchemaName;
 
-    public AthenaClientTests(ITestOutputHelper output, TrinoIcebergStackFixture fixture)
+    public AthenaClientTests(ITestOutputHelper output, AthenaClientTestsClassFixture classFixture)
     {
         _output = output;
-        _fixture = fixture;
+        _classFixture = classFixture;
     }
 
     /// <summary>
-    /// Generates a unique schema name for test isolation
+    /// Generates a unique schema name for tests that need isolated schemas
     /// </summary>
     private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
 
@@ -86,22 +111,8 @@ public class AthenaClientTests
     [Fact]
     public async Task Query_CanDeserializeSimpleTypes()
     {
-        // Arrange
-        var schemaName = GetUniqueSchemaName("query_simple");
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE TABLE iceberg.{schemaName}.people (id int, name varchar, age int, active boolean) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.people VALUES (1, 'Alice', 30, true), (2, 'Bob', 25, false), (3, 'Charlie', 35, true)",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
+        // Use pre-created people table from class fixture
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
 
         // Act
         var results = await client.Query<PersonDto>(

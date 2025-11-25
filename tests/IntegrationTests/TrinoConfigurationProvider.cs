@@ -7,9 +7,13 @@ internal static class TrinoConfigurationProvider
             coordinator=true
             node-scheduler.include-coordinator=true
             http-server.http.port=8080
-            query.max-memory=1GB
-            query.max-memory-per-node=512MB
+            query.max-memory=256MB
+            query.max-memory-per-node=256MB
             discovery.uri=http://trino:8080
+            
+            # Faster query execution for testing
+            query.min-expire-age=0s
+            query.client.timeout=5m
             """u8.ToArray();
 
     public static byte[] GetNodePropertiesBytes() =>
@@ -26,15 +30,13 @@ internal static class TrinoConfigurationProvider
     public static byte[] GetJvmConfigBytes() =>
         """
             -server
-            -Xms512M
-            -Xmx1G
+            -Xms256M
+            -Xmx512M
             -XX:+UseG1GC
-            -XX:G1HeapRegionSize=32M
-            -XX:+ExplicitGCInvokesConcurrent
-            -XX:+HeapDumpOnOutOfMemoryError
+            -XX:G1HeapRegionSize=16M
             -XX:+ExitOnOutOfMemoryError
+            -XX:+UseStringDeduplication
             -Djdk.attach.allowAttachSelf=true
-            -Djava.util.logging.config.file=/etc/trino/log.properties
             """u8.ToArray();
 
     public static byte[] GetIcebergCatalogPropertiesBytes() =>
@@ -56,5 +58,16 @@ internal static class TrinoConfigurationProvider
 
             # Optional Iceberg defaults
             iceberg.file-format=PARQUET
+            
+            # Performance optimizations for testing
+            iceberg.metadata-cache.enabled=true
+            """u8.ToArray();
+    
+    /// <summary>
+    /// Memory catalog properties for fast tests that don't need Iceberg persistence.
+    /// </summary>
+    public static byte[] GetMemoryCatalogPropertiesBytes() =>
+        """
+            connector.name=memory
             """u8.ToArray();
 }

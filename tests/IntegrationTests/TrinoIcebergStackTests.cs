@@ -1,69 +1,65 @@
 namespace IntegrationTests;
 
 /// <summary>
-/// Integration tests for the Trino + Nessie + MinIO stack
+/// Class fixture for TrinoIcebergStackTests - uses the shared common schema from assembly fixture.
+/// No additional setup queries needed - reuses pre-populated test data.
 /// </summary>
-public class TrinoIcebergStackTests
+public sealed class TrinoIcebergStackTestsClassFixture : IAsyncLifetime
 {
-    private readonly ITestOutputHelper _output;
-    private readonly TrinoIcebergStackFixture _fixture;
-    private TrinoIcebergStack Stack => _fixture.Stack;
+    private readonly TrinoIcebergStackFixture _stackFixture;
+    
+    /// <summary>
+    /// Uses the shared schema from assembly fixture - no separate schema creation needed.
+    /// </summary>
+    public string SchemaName => _stackFixture.CommonSchemaName;
+    public TrinoIcebergStack Stack => _stackFixture.Stack;
 
-    public TrinoIcebergStackTests(ITestOutputHelper output, TrinoIcebergStackFixture fixture)
+    public TrinoIcebergStackTestsClassFixture(TrinoIcebergStackFixture stackFixture)
     {
-        _output = output;
-        _fixture = fixture;
+        _stackFixture = stackFixture;
     }
 
-    /// <summary>
-    /// Generates a unique schema name for test isolation
-    /// </summary>
-    private static string GetUniqueSchemaName(string baseName) => $"{baseName}_{Guid.NewGuid():N}".ToLowerInvariant();
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+/// <summary>
+/// Integration tests for the Trino + Nessie + MinIO stack
+/// </summary>
+public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackTestsClassFixture>
+{
+    private readonly ITestOutputHelper _output;
+    private readonly TrinoIcebergStackTestsClassFixture _classFixture;
+    private TrinoIcebergStack Stack => _classFixture.Stack;
+    private string SchemaName => _classFixture.SchemaName;
+
+    public TrinoIcebergStackTests(ITestOutputHelper output, TrinoIcebergStackTestsClassFixture classFixture)
+    {
+        _output = output;
+        _classFixture = classFixture;
+    }
 
     [Fact]
     public async Task CanCreateSchemaInNessieCatalog()
     {
-        // Arrange
-        var schemaName = GetUniqueSchemaName("test_schema");
-
-        // Act
+        // Schema already created in class fixture - just verify it exists
         var result = await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}",
+            $"SHOW SCHEMAS IN iceberg LIKE '{SchemaName}'",
             cancellationToken: TestContext.Current.CancellationToken
         );
 
         // Assert
         _output.WriteLine($"Result: {result}");
-        Assert.Contains("CREATE SCHEMA", result);
+        Assert.Contains(SchemaName, result);
     }
 
     [Fact]
     public async Task CanCreateAndQueryIcebergTable()
     {
-        // Arrange
-        var schemaName = GetUniqueSchemaName("demo");
-
-        // Create schema
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        // Act - Create table
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.test_numbers (id int, name varchar)",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        // Act - Insert data
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.test_numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        // Act - Query data
+        // Use shared numbers table from assembly fixture
         var result = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT * FROM iceberg.{schemaName}.test_numbers ORDER BY id",
+            $"SELECT * FROM iceberg.{SchemaName}.numbers ORDER BY id",
             cancellationToken: TestContext.Current.CancellationToken
         );
 
@@ -80,35 +76,14 @@ public class TrinoIcebergStackTests
     [Fact]
     public async Task CanExecuteMultipleQueries()
     {
-        // Arrange
-        var schemaName = GetUniqueSchemaName("analytics");
-
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{schemaName}",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE TABLE IF NOT EXISTS iceberg.{schemaName}.events (event_id bigint, event_type varchar, timestamp timestamp)",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        // Act
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.events VALUES "
-                + "(1, 'click', TIMESTAMP '2025-11-15 10:00:00'), "
-                + "(2, 'view', TIMESTAMP '2025-11-15 10:05:00'), "
-                + "(3, 'click', TIMESTAMP '2025-11-15 10:10:00')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
+        // Use shared numbers table from assembly fixture
         var countResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT COUNT(*) as total FROM iceberg.{schemaName}.events",
+            $"SELECT COUNT(*) as total FROM iceberg.{SchemaName}.numbers",
             cancellationToken: TestContext.Current.CancellationToken
         );
 
         var groupResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT event_type, COUNT(*) as count FROM iceberg.{schemaName}.events GROUP BY event_type ORDER BY event_type",
+            $"SELECT name, id FROM iceberg.{SchemaName}.numbers ORDER BY name",
             cancellationToken: TestContext.Current.CancellationToken
         );
 
@@ -117,8 +92,9 @@ public class TrinoIcebergStackTests
         _output.WriteLine($"Group result: {groupResult}");
 
         Assert.Contains("\"3\"", countResult);
-        Assert.Contains("\"click\"", groupResult);
-        Assert.Contains("\"view\"", groupResult);
+        Assert.Contains("\"one\"", groupResult);
+        Assert.Contains("\"two\"", groupResult);
+        Assert.Contains("\"three\"", groupResult);
     }
 
     [Fact]
