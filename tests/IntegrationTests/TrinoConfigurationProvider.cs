@@ -29,15 +29,12 @@ internal static class TrinoConfigurationProvider
     public static byte[] GetJvmConfigBytes() =>
         """
             -server
-            -Xms512M
-            -Xmx512M
-            -XX:+UseG1GC
-            -XX:G1HeapRegionSize=16M
+            -Xms256M
+            -Xmx256M
+            -XX:+UseSerialGC
             -XX:+ExitOnOutOfMemoryError
-            -XX:+UseStringDeduplication
+            -XX:TieredStopAtLevel=1
             -Djdk.attach.allowAttachSelf=true
-            -XX:+AlwaysPreTouch
-            -XX:InitiatingHeapOccupancyPercent=30
             """u8.ToArray();
 
     public static byte[] GetIcebergCatalogPropertiesBytes() =>

@@ -130,12 +130,13 @@ public class TrinoIcebergStack : IAsyncDisposable
             _nessieContainer.StartAsync(cancellationToken)
         ).ConfigureAwait(false);
 
-        // Initialize MinIO bucket using exec instead of a separate container
-        // The MinIO container includes the mc client
-        await InitializeMinIOBucketAsync(cancellationToken);
-
-        // Start Trino last - depends on both MinIO and Nessie being ready
-        await _trinoContainer.StartAsync(cancellationToken).ConfigureAwait(false);
+        // Initialize MinIO bucket and start Trino in parallel
+        // Trino JVM startup takes ~30s and doesn't need the bucket until first query
+        // Bucket init is fast (~2s) and will complete before Trino is ready to query
+        await Task.WhenAll(
+            InitializeMinIOBucketAsync(cancellationToken),
+            _trinoContainer.StartAsync(cancellationToken)
+        ).ConfigureAwait(false);
     }
 
     /// <summary>
