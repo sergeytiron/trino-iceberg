@@ -12,6 +12,7 @@ C# Testcontainers implementation of the Trino + Nessie + MinIO stack for integra
 - `TrinoIcebergStack.cs` - Main stack orchestration (mirrors docker-compose.yml)
 - `TrinoConfigurationProvider.cs` - Embedded Trino configuration (no external files needed)
 - `TrinoIcebergStackFixture.cs` - Shared fixture for test collection
+- `Scripts/init-common-schema.sql` - SQL init script for test data setup
 - `IntegrationTests.csproj` - Project file with NuGet references
 
 ## NuGet Packages
@@ -98,6 +99,22 @@ Starts all containers in dependency order:
 1. Network
 2. MinIO and Nessie (in parallel)
 3. MinIO bucket initialization and Trino startup (in parallel)
+4. Init scripts execution (if configured)
+
+### `WithInitScript(string schema, string resourcePath)`
+Configures a `.sql` file to be executed after the stack starts. The schema is created automatically.
+
+```csharp
+var stack = new TrinoIcebergStack()
+    .WithInitScript("my_schema", "Scripts/init.sql");
+await stack.StartAsync();
+```
+
+SQL files support:
+- Semicolon-separated statements
+- Single-line comments (`--`)
+- Multi-line comments (`/* */`)
+- String literals with quotes
 
 ### Query Execution Methods (ADO.NET)
 

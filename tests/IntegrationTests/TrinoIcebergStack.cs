@@ -1,5 +1,6 @@
 using System.Data;
 using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 using Trino.Data.ADO.Server;
@@ -137,6 +138,62 @@ public class TrinoIcebergStack : IAsyncDisposable
             InitializeMinIOBucketAsync(cancellationToken),
             _trinoContainer.StartAsync(cancellationToken)
         ).ConfigureAwait(false);
+
+        // Execute init scripts after Trino is ready (auto-discovered from Scripts/create and Scripts/insert)
+        await ExecuteInitScriptsAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes init scripts from Scripts/create and Scripts/insert folders (in that order).
+    /// Scripts are copied to the Trino container and executed via Trino CLI.
+    /// </summary>
+    private async Task ExecuteInitScriptsAsync(CancellationToken cancellationToken)
+    {
+        const string containerScriptsDir = "/tmp/init-scripts";
+
+        // Discover scripts from convention-based folders (create first, then insert)
+        var scriptFolders = new[] { "Scripts/create", "Scripts/insert" };
+        var scripts = scriptFolders
+            .Where(Directory.Exists)
+            .SelectMany(folder => Directory.GetFiles(folder, "*.sql").OrderBy(f => f))
+            .ToList();
+
+        if (scripts.Count == 0)
+        {
+            _logger?.Invoke("No init scripts found in Scripts/create or Scripts/insert");
+            return;
+        }
+
+        foreach (var filePath in scripts)
+        {
+            // Copy the SQL file to the Trino container
+            var fileName = Path.GetFileName(filePath);
+            var containerScriptPath = $"{containerScriptsDir}/{fileName}";
+
+            var scriptContent = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+            // 644 = Owner RW, Group R, Others R
+            const UnixFileModes fileMode644 = UnixFileModes.UserRead | UnixFileModes.UserWrite | UnixFileModes.GroupRead | UnixFileModes.OtherRead;
+            await _trinoContainer.CopyAsync(scriptContent, containerScriptPath, fileMode644, cancellationToken).ConfigureAwait(false);
+            _logger?.Invoke($"Copied {fileName} to container at {containerScriptPath}");
+
+            // Execute the script using Trino CLI
+            var trinoCliCommand = $"trino --server localhost:{TrinoPort} --file {containerScriptPath}";
+            var result = await _trinoContainer
+                .ExecAsync(["sh", "-c", trinoCliCommand], cancellationToken)
+                .ConfigureAwait(false);
+
+            if (result.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Init script execution failed for {fileName} with exit code {result.ExitCode}.{Environment.NewLine}" +
+                    $"Command: {trinoCliCommand}{Environment.NewLine}" +
+                    $"Stdout: {result.Stdout}{Environment.NewLine}" +
+                    $"Stderr: {result.Stderr}"
+                );
+            }
+
+            _logger?.Invoke($"Executed init script: {fileName}");
+        }
     }
 
     /// <summary>

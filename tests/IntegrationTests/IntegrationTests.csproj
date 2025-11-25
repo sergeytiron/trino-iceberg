@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Scripts\**\*.sql" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\AthenaTrinoClient\AthenaTrinoClient.csproj" />
   </ItemGroup>
 </Project>
