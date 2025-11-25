@@ -149,56 +149,6 @@ public class TrinoIcebergStack : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes a SQL query against Trino and returns the result.
-    /// </summary>
-    /// <param name="sql">The SQL query to execute</param>
-    /// <param name="timeout">Maximum time to wait for query execution (default: 30 seconds)</param>
-    /// <param name="cancellationToken">Cancellation token for the operation</param>
-    /// <returns>The query output including stdout and stderr</returns>
-    /// <exception cref="ArgumentException">Thrown when SQL is null or empty</exception>
-    /// <exception cref="TimeoutException">Thrown when the query exceeds the timeout</exception>
-    /// <exception cref="OperationCanceledException">Thrown when the operation is canceled via the provided cancellation token</exception>
-    public async Task<string> ExecuteTrinoQueryAsync(
-        string sql,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-        {
-            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
-        }
-
-        timeout ??= TimeSpan.FromSeconds(30);
-
-        using var timeoutCts = new CancellationTokenSource(timeout.Value);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-        try
-        {
-            var execResult = await _trinoContainer
-                .ExecAsync(["trino", "--execute", sql], linkedCts.Token)
-                .ConfigureAwait(false);
-
-            // Trino writes results to stdout and some messages to stderr
-            var output = execResult.Stdout;
-            if (!string.IsNullOrEmpty(execResult.Stderr))
-            {
-                output += Environment.NewLine + execResult.Stderr;
-            }
-
-            return output;
-        }
-        catch (OperationCanceledException)
-            when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException(
-                $"Query execution timed out after {timeout.Value.TotalSeconds} seconds. SQL: {sql}"
-            );
-        }
-    }
-
-    /// <summary>
     /// Executes a SQL statement against Trino using ADO.NET (faster than CLI exec).
     /// Use this for fixture setup and bulk operations.
     /// </summary>
@@ -223,6 +173,74 @@ public class TrinoIcebergStack : IAsyncDisposable
         connection.Open();
         using var command = new TrinoCommand(connection, sql);
         return command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Executes a SELECT query and returns results as a list of string arrays.
+    /// Each array represents a row, with values converted to strings.
+    /// </summary>
+    /// <param name="sql">The SQL SELECT query to execute</param>
+    /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
+    /// <returns>List of rows, where each row is an array of string values</returns>
+    public List<string[]> ExecuteQueryFast(string sql, string? schema = null)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
+        }
+
+        var properties = new TrinoConnectionProperties
+        {
+            Server = new Uri(TrinoEndpoint),
+            Catalog = "iceberg",
+            Schema = schema!
+        };
+
+        using var connection = new TrinoConnection(properties);
+        connection.Open();
+        using var command = new TrinoCommand(connection, sql);
+        using var reader = command.ExecuteReader();
+        
+        var results = new List<string[]>();
+        var fieldCount = reader.FieldCount;
+        
+        while (reader.Read())
+        {
+            var row = new string[fieldCount];
+            for (int i = 0; i < fieldCount; i++)
+            {
+                row[i] = reader.IsDBNull(i) ? "" : reader.GetValue(i)?.ToString() ?? "";
+            }
+            results.Add(row);
+        }
+        
+        return results;
+    }
+
+    /// <summary>
+    /// Executes a SELECT query and returns a scalar value (first column of first row).
+    /// </summary>
+    /// <param name="sql">The SQL SELECT query to execute</param>
+    /// <param name="schema">Optional schema name (default: null uses catalog default)</param>
+    /// <returns>The scalar value as object, or null if no rows returned</returns>
+    public object? ExecuteScalarFast(string sql, string? schema = null)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or empty", nameof(sql));
+        }
+
+        var properties = new TrinoConnectionProperties
+        {
+            Server = new Uri(TrinoEndpoint),
+            Catalog = "iceberg",
+            Schema = schema!
+        };
+
+        using var connection = new TrinoConnection(properties);
+        connection.Open();
+        using var command = new TrinoCommand(connection, sql);
+        return command.ExecuteScalar();
     }
 
     /// <summary>

@@ -55,33 +55,24 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_timetravel");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.events (event_id bigint, event_type varchar, event_time timestamp) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        // Snapshot 1 data
-        await Stack.ExecuteTrinoQueryAsync(
+            // Snapshot 1 data
             $"INSERT INTO iceberg.{schemaName}.events VALUES "
                 + "(1, 'login', TIMESTAMP '2025-11-17 10:00:00'), "
-                + "(2, 'click', TIMESTAMP '2025-11-17 10:05:00')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+                + "(2, 'click', TIMESTAMP '2025-11-17 10:05:00')"
+        ]);
 
         // Ensure a distinct commit time boundary
         await Task.Delay(1500, TestContext.Current.CancellationToken);
         var timeTravelInstant = DateTime.UtcNow; // capture point between commits
 
         // Snapshot 2 data (should not be visible when traveling to timeTravelInstant)
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlFast(
             $"INSERT INTO iceberg.{schemaName}.events VALUES "
                 + "(3, 'purchase', TIMESTAMP '2025-11-17 10:10:00'), "
-                + "(4, 'logout', TIMESTAMP '2025-11-17 10:15:00')",
-            cancellationToken: TestContext.Current.CancellationToken
+                + "(4, 'logout', TIMESTAMP '2025-11-17 10:15:00')"
         );
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
@@ -146,18 +137,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_params");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.users (id int, username varchar) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.users VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.users VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
@@ -181,18 +165,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_multi_params");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.products (id int, name varchar, price double, in_stock boolean) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.products VALUES (1, 'Widget', 9.99, true), (2, 'Gadget', 19.99, true), (3, 'Doohickey', 29.99, false), (4, 'Thingamajig', 39.99, true)",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.products VALUES (1, 'Widget', 9.99, true), (2, 'Gadget', 19.99, true), (3, 'Doohickey', 29.99, false), (4, 'Thingamajig', 39.99, true)"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
@@ -219,18 +196,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_nulls");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.contacts (id int, name varchar, email varchar, phone varchar) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.contacts VALUES (1, 'Alice', 'alice@example.com', '555-0001'), (2, 'Bob', NULL, '555-0002'), (3, 'Charlie', 'charlie@example.com', NULL)",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.contacts VALUES (1, 'Alice', 'alice@example.com', '555-0001'), (2, 'Bob', NULL, '555-0002'), (3, 'Charlie', 'charlie@example.com', NULL)"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
@@ -263,18 +233,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_snake_case");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.employees (employee_id int, first_name varchar, last_name varchar, hire_date date) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.employees VALUES (101, 'John', 'Doe', DATE '2020-01-15'), (102, 'Jane', 'Smith', DATE '2021-03-20')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.employees VALUES (101, 'John', 'Doe', DATE '2020-01-15'), (102, 'Jane', 'Smith', DATE '2021-03-20')"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
@@ -298,14 +261,10 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_empty");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"CREATE TABLE iceberg.{schemaName}.items (id int, name varchar) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"CREATE TABLE iceberg.{schemaName}.items (id int, name varchar) WITH (format='PARQUET')"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
@@ -330,18 +289,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("unload_test");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.data (id int, value varchar) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.data VALUES (1, 'one'), (2, 'two'), (3, 'three')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.data VALUES (1, 'one'), (2, 'two'), (3, 'three')"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
         var exportPath = $"exports/{schemaName}";
@@ -356,11 +308,10 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
         _output.WriteLine($"Successfully unloaded {response.RowCount} rows to {response.S3AbsolutePath}");
 
         // Verify the data was written to S3 by querying the files
-        var verifyResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT COUNT(*) FROM iceberg.\"$path\".files WHERE path LIKE '%exports/{schemaName}%'",
-            cancellationToken: TestContext.Current.CancellationToken
+        var verifyResults = Stack.ExecuteQueryFast(
+            $"SELECT COUNT(*) FROM iceberg.\"$path\".files WHERE path LIKE '%exports/{schemaName}%'"
         );
-        _output.WriteLine($"Verification query result: {verifyResult}");
+        _output.WriteLine($"Verification query result: {verifyResults.FirstOrDefault()?.FirstOrDefault() ?? "no rows"}");
     }
 
     [Fact]
@@ -368,18 +319,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("unload_params");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.sales (id int, amount double, region varchar) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.sales VALUES (1, 100.50, 'North'), (2, 200.75, 'South'), (3, 150.25, 'North')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.sales VALUES (1, 100.50, 'North'), (2, 200.75, 'South'), (3, 150.25, 'North')"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
         var exportPath = $"exports/{schemaName}";
@@ -410,18 +354,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_numeric");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.measurements (id int, value_int bigint, value_double double, value_decimal decimal(10,2)) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.measurements VALUES (1, 9223372036854775807, 3.14159, 99.99)",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.measurements VALUES (1, 9223372036854775807, 3.14159, 99.99)"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 
@@ -445,18 +382,11 @@ public class AthenaClientTests : IClassFixture<AthenaClientTestsClassFixture>
     {
         // Arrange
         var schemaName = GetUniqueSchemaName("query_string_escape");
-        await Stack.ExecuteTrinoQueryAsync(
+        Stack.ExecuteSqlBatchFast([
             $"CREATE SCHEMA iceberg.{schemaName} WITH (location='s3://warehouse/{schemaName}/')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
             $"CREATE TABLE iceberg.{schemaName}.messages (id int, content varchar) WITH (format='PARQUET')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-        await Stack.ExecuteTrinoQueryAsync(
-            $"INSERT INTO iceberg.{schemaName}.messages VALUES (1, 'Hello World'), (2, 'It''s a test'), (3, 'Quote: \"test\"')",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+            $"INSERT INTO iceberg.{schemaName}.messages VALUES (1, 'Hello World'), (2, 'It''s a test'), (3, 'Quote: \"test\"')"
+        ]);
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", schemaName);
 

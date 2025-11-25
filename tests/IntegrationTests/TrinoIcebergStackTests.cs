@@ -41,60 +41,59 @@ public class TrinoIcebergStackTests : IClassFixture<TrinoIcebergStackTestsClassF
     }
 
     [Fact]
-    public async Task CanCreateSchemaInNessieCatalog()
+    public void CanCreateSchemaInNessieCatalog()
     {
-        // Schema already created in class fixture - just verify it exists
-        var result = await Stack.ExecuteTrinoQueryAsync(
-            $"SHOW SCHEMAS IN iceberg LIKE '{SchemaName}'",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+        // Schema already created in assembly fixture - verify it exists using ADO.NET
+        var results = Stack.ExecuteQueryFast($"SHOW SCHEMAS IN iceberg LIKE '{SchemaName}'");
 
         // Assert
-        _output.WriteLine($"Result: {result}");
-        Assert.Contains(SchemaName, result);
+        _output.WriteLine($"Result rows: {results.Count}");
+        foreach (var row in results)
+        {
+            _output.WriteLine($"  Schema: {string.Join(", ", row)}");
+        }
+        Assert.Contains(results, row => row.Any(col => col.Contains(SchemaName)));
     }
 
     [Fact]
-    public async Task CanCreateAndQueryIcebergTable()
+    public void CanCreateAndQueryIcebergTable()
     {
         // Use shared numbers table from assembly fixture
-        var result = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT * FROM iceberg.{SchemaName}.numbers ORDER BY id",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+        var results = Stack.ExecuteQueryFast($"SELECT * FROM iceberg.{SchemaName}.numbers ORDER BY id");
 
         // Assert
-        _output.WriteLine($"Query result:\n{result}");
-        Assert.Contains("\"1\"", result);
-        Assert.Contains("\"one\"", result);
-        Assert.Contains("\"2\"", result);
-        Assert.Contains("\"two\"", result);
-        Assert.Contains("\"3\"", result);
-        Assert.Contains("\"three\"", result);
+        _output.WriteLine($"Query returned {results.Count} rows:");
+        foreach (var row in results)
+        {
+            _output.WriteLine($"  {string.Join(", ", row)}");
+        }
+        
+        Assert.Equal(3, results.Count);
+        Assert.Contains(results, row => row[0] == "1" && row[1] == "one");
+        Assert.Contains(results, row => row[0] == "2" && row[1] == "two");
+        Assert.Contains(results, row => row[0] == "3" && row[1] == "three");
     }
 
     [Fact]
-    public async Task CanExecuteMultipleQueries()
+    public void CanExecuteMultipleQueries()
     {
         // Use shared numbers table from assembly fixture
-        var countResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT COUNT(*) as total FROM iceberg.{SchemaName}.numbers",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
-
-        var groupResult = await Stack.ExecuteTrinoQueryAsync(
-            $"SELECT name, id FROM iceberg.{SchemaName}.numbers ORDER BY name",
-            cancellationToken: TestContext.Current.CancellationToken
-        );
+        var count = Stack.ExecuteScalarFast($"SELECT COUNT(*) as total FROM iceberg.{SchemaName}.numbers");
+        var groupResults = Stack.ExecuteQueryFast($"SELECT name, id FROM iceberg.{SchemaName}.numbers ORDER BY name");
 
         // Assert
-        _output.WriteLine($"Count result: {countResult}");
-        _output.WriteLine($"Group result: {groupResult}");
+        _output.WriteLine($"Count result: {count}");
+        _output.WriteLine($"Group results ({groupResults.Count} rows):");
+        foreach (var row in groupResults)
+        {
+            _output.WriteLine($"  {string.Join(", ", row)}");
+        }
 
-        Assert.Contains("\"3\"", countResult);
-        Assert.Contains("\"one\"", groupResult);
-        Assert.Contains("\"two\"", groupResult);
-        Assert.Contains("\"three\"", groupResult);
+        Assert.Equal(3L, count);
+        Assert.Equal(3, groupResults.Count);
+        Assert.Contains(groupResults, row => row[0] == "one");
+        Assert.Contains(groupResults, row => row[0] == "two");
+        Assert.Contains(groupResults, row => row[0] == "three");
     }
 
     [Fact]
