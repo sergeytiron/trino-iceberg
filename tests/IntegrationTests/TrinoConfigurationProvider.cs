@@ -7,17 +7,16 @@ internal static class TrinoConfigurationProvider
             coordinator=true
             node-scheduler.include-coordinator=true
             http-server.http.port=8080
-            query.max-memory=256MB
-            query.max-memory-per-node=256MB
+            query.max-memory=512MB
             discovery.uri=http://trino:8080
-            
+
             # Faster query execution for testing
             query.min-expire-age=0s
             query.client.timeout=5m
             """u8.ToArray();
 
     public static byte[] GetNodePropertiesBytes() =>
-        """
+            """
             node.environment=dev
             node.id=trino-local
             node.data-dir=/data/trino
@@ -30,13 +29,15 @@ internal static class TrinoConfigurationProvider
     public static byte[] GetJvmConfigBytes() =>
         """
             -server
-            -Xms256M
+            -Xms512M
             -Xmx512M
             -XX:+UseG1GC
             -XX:G1HeapRegionSize=16M
             -XX:+ExitOnOutOfMemoryError
             -XX:+UseStringDeduplication
             -Djdk.attach.allowAttachSelf=true
+            -XX:+AlwaysPreTouch
+            -XX:InitiatingHeapOccupancyPercent=30
             """u8.ToArray();
 
     public static byte[] GetIcebergCatalogPropertiesBytes() =>
@@ -58,16 +59,13 @@ internal static class TrinoConfigurationProvider
 
             # Optional Iceberg defaults
             iceberg.file-format=PARQUET
-            
+
             # Performance optimizations for testing
             iceberg.metadata-cache.enabled=true
-            """u8.ToArray();
-    
-    /// <summary>
-    /// Memory catalog properties for fast tests that don't need Iceberg persistence.
-    /// </summary>
-    public static byte[] GetMemoryCatalogPropertiesBytes() =>
-        """
-            connector.name=memory
+            iceberg.expire-snapshots.min-retention=0s
+            iceberg.remove-orphan-files.min-retention=0s
+
+            # Reduce S3 overhead
+            s3.streaming.part-size=8MB
             """u8.ToArray();
 }

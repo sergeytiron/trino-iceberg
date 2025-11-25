@@ -10,47 +10,63 @@ namespace IntegrationTests;
 public sealed class TrinoIcebergStackFixture : IAsyncLifetime
 {
     public TrinoIcebergStack Stack { get; private set; } = null!;
-    
+
     /// <summary>
     /// Shared schema name available to all tests. Contains pre-populated test tables.
     /// </summary>
-    public string CommonSchemaName { get; } = "common_test_data";
+    public string CommonSchemaName => "common_test_data";
 
     public async ValueTask InitializeAsync()
     {
         Stack = new TrinoIcebergStack();
-        await Stack.StartAsync(CancellationToken.None);
-        
-        // Warmup query using ADO.NET - this primes Trino's JIT and catalog initialization
-        // The first query is always slow (~15-20s), subsequent queries are much faster (~1-3s)
-        Stack.ExecuteSqlFast("SELECT 1");
-        
-        // Create shared test data schema and all tables using ADO.NET batch
-        // This is much faster than CLI calls since it reuses a single connection
+        await Stack.StartAsync(TestContext.Current.CancellationToken);
+
+        Stack.ExecuteSqlFast($"CREATE SCHEMA IF NOT EXISTS {CommonSchemaName}");
+
+        // Consolidated tables (reduced from 9 to 4 tables + 1 per-test table)
+        // shared_data: combines test_data, people, users, contacts, messages into one multi-purpose table
+        // category_data: for aggregation tests (formerly sales)
+        // employee_data: for snake_case column mapping + date type (formerly employees)
+        // numeric_data: for numeric extremes + decimal (formerly measurements)
+        // events_time_travel: kept separate as tests INSERT into it (not pre-populated)
         Stack.ExecuteSqlBatchFast([
-            // Create schema
-            $"CREATE SCHEMA IF NOT EXISTS iceberg.{CommonSchemaName} WITH (location='s3://warehouse/{CommonSchemaName}/')",
-            
-            // Create all tables
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.numbers (id int, name varchar) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.test_data (id int, value varchar) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.test_table (id int, name varchar, value int) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.sales (amount bigint, category varchar) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.mixed_types (id int, name varchar, amount bigint, active boolean) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.null_test (id int, nullable_value varchar) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.people (id int, name varchar, age int, active boolean) WITH (format='PARQUET')",
-            $"CREATE TABLE IF NOT EXISTS iceberg.{CommonSchemaName}.products (product_id int, price double, quantity bigint) WITH (format='PARQUET')",
-            
-            // Insert data into all tables
-            $"INSERT INTO iceberg.{CommonSchemaName}.numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')",
-            $"INSERT INTO iceberg.{CommonSchemaName}.test_data VALUES (100, 'test'), (200, 'data')",
-            $"INSERT INTO iceberg.{CommonSchemaName}.test_table VALUES (1, 'first', 100), (2, 'second', 200), (3, 'third', 300)",
-            $"INSERT INTO iceberg.{CommonSchemaName}.sales VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')",
-            $"INSERT INTO iceberg.{CommonSchemaName}.mixed_types VALUES (1, 'Alice', 1000, true), (2, 'Bob', 2000, false)",
-            $"INSERT INTO iceberg.{CommonSchemaName}.null_test VALUES (1, null), (2, 'not null')",
-            $"INSERT INTO iceberg.{CommonSchemaName}.people VALUES (1, 'Alice', 30, true), (2, 'Bob', 25, false), (3, 'Charlie', 35, true)",
-            $"INSERT INTO iceberg.{CommonSchemaName}.products VALUES (100, 29.99, 50), (200, 49.99, 30), (300, 19.99, 100)"
-        ]);
+            @"CREATE TABLE IF NOT EXISTS shared_data (
+                id int,
+                value varchar,
+                name varchar,
+                age int,
+                active boolean,
+                username varchar,
+                email varchar,
+                phone varchar,
+                content varchar,
+                value_int bigint,
+                value_double double,
+                value_decimal decimal(10,2)
+            )",
+            "CREATE TABLE IF NOT EXISTS category_data (amount bigint, category varchar)",
+            "CREATE TABLE IF NOT EXISTS employee_data (employee_id int, first_name varchar, last_name varchar, hire_date date)",
+            "CREATE TABLE IF NOT EXISTS events_time_travel (event_id bigint, event_type varchar, event_time timestamp)"
+        ], CommonSchemaName);
+
+        Stack.ExecuteSqlBatchFast([
+            // shared_data combines multiple use cases:
+            // - Rows 1-2: test_data pattern (id, value)
+            // - Rows 1-3: people pattern (id, name, age, active)
+            // - Rows 1-3: users pattern (id, username)
+            // - Rows 1-3: contacts pattern (id, name, email, phone) with NULLs
+            // - Rows 1-3: messages pattern (id, content) with escaping
+            // - Row 4: measurements pattern (numeric extremes)
+            @"INSERT INTO shared_data VALUES
+                (1, 'test', 'Alice', 30, true, 'alice', 'alice@example.com', '555-0001', 'Hello World', NULL, NULL, NULL),
+                (2, 'data', 'Bob', 25, false, 'bob', NULL, '555-0002', 'It''s a test', NULL, NULL, NULL),
+                (3, NULL, 'Charlie', 35, true, 'charlie', 'charlie@example.com', NULL, 'Quote: ""test""', NULL, NULL, NULL),
+                (100, 'test', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9223372036854775807, 3.14159, 99.99),
+                (200, 'data', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)",
+            "INSERT INTO category_data VALUES (100, 'A'), (200, 'B'), (150, 'A'), (300, 'B')",
+            "INSERT INTO employee_data VALUES (1, 'John', 'Doe', DATE '2020-01-15'), (2, 'Jane', 'Smith', DATE '2019-03-22')"
+        ], CommonSchemaName);
+
     }
 
     public async ValueTask DisposeAsync()

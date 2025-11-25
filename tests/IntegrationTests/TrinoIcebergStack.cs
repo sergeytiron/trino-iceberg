@@ -33,12 +33,6 @@ public class TrinoIcebergStack : IAsyncDisposable
     /// <summary>Gets the MinIO S3 API endpoint URL</summary>
     public string MinioEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(MinioS3Port)}";
 
-    /// <summary>Gets the MinIO console endpoint URL</summary>
-    public string MinioConsoleEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(MinioConsolePort)}";
-
-    /// <summary>Gets the Nessie catalog endpoint URL</summary>
-    public string NessieEndpoint => $"http://localhost:{_nessieContainer.GetMappedPublicPort(NessiePort)}";
-
     /// <summary>Gets the Trino query engine endpoint URL</summary>
     public string TrinoEndpoint => $"http://localhost:{_trinoContainer.GetMappedPublicPort(TrinoPort)}";
 
@@ -115,10 +109,6 @@ public class TrinoIcebergStack : IAsyncDisposable
             .WithResourceMapping(
                 TrinoConfigurationProvider.GetIcebergCatalogPropertiesBytes(),
                 "/etc/trino/catalog/iceberg.properties"
-            )
-            .WithResourceMapping(
-                TrinoConfigurationProvider.GetMemoryCatalogPropertiesBytes(),
-                "/etc/trino/catalog/memory.properties"
             )
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("SERVER STARTED"))
             .Build();
@@ -200,10 +190,10 @@ public class TrinoIcebergStack : IAsyncDisposable
         connection.Open();
         using var command = new TrinoCommand(connection, sql);
         using var reader = command.ExecuteReader();
-        
+
         var results = new List<string[]>();
         var fieldCount = reader.FieldCount;
-        
+
         while (reader.Read())
         {
             var row = new string[fieldCount];
@@ -213,7 +203,7 @@ public class TrinoIcebergStack : IAsyncDisposable
             }
             results.Add(row);
         }
-        
+
         return results;
     }
 
@@ -261,12 +251,17 @@ public class TrinoIcebergStack : IAsyncDisposable
         using var connection = new TrinoConnection(properties);
         connection.Open();
 
+        var tasks = new List<Task>();
         foreach (var sql in sqlStatements)
         {
-            if (string.IsNullOrWhiteSpace(sql)) continue;
-            using var command = new TrinoCommand(connection, sql);
-            command.ExecuteNonQuery();
+            tasks.Add(Task.Run(() =>
+            {
+                using var command = new TrinoCommand(connection, sql);
+                return command.ExecuteNonQuery();
+            }));
         }
+
+        Task.WaitAll([.. tasks]);
     }
 
     /// <summary>
@@ -325,8 +320,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         if (createBucketResult.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"MinIO bucket initialization failed with exit code {createBucketResult.ExitCode}. "
-                    + $"Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}"
+                $"MinIO bucket initialization failed with exit code {createBucketResult.ExitCode}. Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}"
             );
         }
     }

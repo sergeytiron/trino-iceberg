@@ -111,7 +111,7 @@ public class AthenaClient : IAthenaClient
 
         // Generate a unique table name for the export
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-        var guid = Guid.NewGuid().ToString("N").Substring(0, 8);
+        var guid = Guid.NewGuid().ToString("N")[..8];
         var exportTableName = $"unload_temp_{timestamp}_{guid}";
         var absolutePath = $"s3://warehouse/{s3RelativePath}";
 
