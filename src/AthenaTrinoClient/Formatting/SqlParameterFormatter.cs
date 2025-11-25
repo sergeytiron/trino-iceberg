@@ -3,11 +3,14 @@ using System.Globalization;
 namespace AthenaTrinoClient.Formatting;
 
 /// <summary>
-/// Default implementation of ISqlParameterFormatter.
+/// Converts formattable strings into SQL queries with properly escaped and formatted parameter values.
+/// Handles special case for DateTime parameters preceded by TIMESTAMP keyword.
 /// </summary>
-public class SqlParameterFormatter : ISqlParameterFormatter
+public class SqlParameterFormatter
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Converts a FormattableString into a SQL query with all parameters inlined as literals.
+    /// </summary>
     public string ConvertFormattableStringToParameterizedQuery(FormattableString query)
     {
         var format = query.Format;
