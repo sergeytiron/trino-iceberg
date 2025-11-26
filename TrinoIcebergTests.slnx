@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/examples/">
     <Project Path="examples/TrinoClientExample/TrinoClientExample.csproj" />
+    <Project Path="examples/AthenaVerification/AthenaVerification.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AthenaTrinoClient/AthenaTrinoClient.csproj" />

@@ -1,90 +1,80 @@
 using AthenaTrinoClient;
-using System.Globalization;
 
-Console.WriteLine("Starting AthenaClient Verification...");
+Console.WriteLine("🧪 AthenaClient Verification");
+Console.WriteLine("=============================\n");
 
-var trinoEndpoint = new Uri("http://localhost:8080");
-var catalog = "iceberg";
-var schema = "demo";
+var trinoEndpoint = Environment.GetEnvironmentVariable("TRINO_ENDPOINT") ?? "http://localhost:8080";
+var catalog = Environment.GetEnvironmentVariable("TRINO_CATALOG") ?? "iceberg";
+var schema = Environment.GetEnvironmentVariable("TRINO_SCHEMA") ?? "demo";
 
-// Ensure schema exists (using raw client or just assuming validate.sh ran)
-// We'll use AthenaClient to query.
+Console.WriteLine($"🔗 Connecting to Trino at: {trinoEndpoint}");
+Console.WriteLine($"📂 Using catalog: {catalog}, schema: {schema}\n");
 
-var client = new AthenaClient(trinoEndpoint, catalog, schema);
+var client = new AthenaClient(new Uri(trinoEndpoint), catalog, schema);
 
-try 
+try
 {
     // 1. Verify Decimal Formatting (Invariant Culture)
-    Console.WriteLine("\nTesting Decimal Formatting...");
+    Console.WriteLine("🔢 Test 1: Decimal Formatting...");
     decimal testDecimal = 123.456m;
-    // We expect the query to be formatted with '.' not ',' regardless of system locale
-    // We can't easily check the generated SQL string directly without exposing it, 
-    // but we can check if the query executes successfully. 
-    // If it was formatted with ',' (e.g. 123,456) it might be interpreted as two values or syntax error depending on context.
-    
-    // Let's try to select it back.
-    // This uses the FormattableString overload which calls FormatSqlValue
-    
-    var result = await client.Query<DecimalResult>($"SELECT {testDecimal} as val");
-    
-    if (result.Count == 1 && result[0].Val == testDecimal)
+    var decimalResult = await client.Query<DecimalResult>($"SELECT {testDecimal} as val");
+
+    if (decimalResult.Count == 1 && decimalResult[0].Val == testDecimal)
     {
-        Console.WriteLine($"SUCCESS: Decimal {testDecimal} round-tripped correctly.");
+        Console.WriteLine($"✅ Decimal {testDecimal} round-tripped correctly.\n");
     }
     else
     {
-        Console.WriteLine($"FAILURE: Decimal round-trip failed. Expected {testDecimal}, got {result.FirstOrDefault()?.Val}");
+        Console.WriteLine($"❌ Decimal round-trip failed. Expected {testDecimal}, got {decimalResult.FirstOrDefault()?.Val}\n");
     }
 
-    // 2. Verify Object Mapping (Caching)
-    Console.WriteLine("\nTesting Object Mapping...");
-    // Create a table and insert some data if not exists
-    // We'll just query a static select for simplicity to test mapping
-    // Note: We must use interpolation $"" to create FormattableString, even if no args
+    // 2. Verify Object Mapping
+    Console.WriteLine("🗺️ Test 2: Object Mapping...");
     var mapResult = await client.Query<UserDto>($"SELECT 1 as id, 'Test User' as name, true as is_active");
 
     if (mapResult.Count == 1)
     {
         var user = mapResult[0];
-        if (user.Id == 1 && user.Name == "Test User" && user.IsActive == true)
+        if (user.Id == 1 && user.Name == "Test User" && user.IsActive)
         {
-             Console.WriteLine("SUCCESS: Object mapping worked correctly.");
+            Console.WriteLine("✅ Object mapping worked correctly.\n");
         }
         else
         {
-             Console.WriteLine($"FAILURE: Object mapping mismatch. Got: {user.Id}, {user.Name}, {user.IsActive}");
+            Console.WriteLine($"❌ Object mapping mismatch. Got: Id={user.Id}, Name={user.Name}, IsActive={user.IsActive}\n");
         }
     }
     else
     {
-        Console.WriteLine("FAILURE: No results returned for mapping test.");
+        Console.WriteLine("❌ No results returned for mapping test.\n");
     }
-    
+
     // 3. Verify Guid Support
-    Console.WriteLine("\nTesting Guid Formatting...");
+    Console.WriteLine("🆔 Test 3: Guid Formatting...");
     Guid testGuid = Guid.NewGuid();
-    
-    // Trino doesn't have a native GUID type, usually treated as string/varchar. 
-    // Our FormatSqlValue wraps it in single quotes.
-    
     var guidResult = await client.Query<StringResult>($"SELECT {testGuid} as val");
-    
+
     if (guidResult.Count == 1 && guidResult[0].Val == testGuid.ToString())
     {
-        Console.WriteLine($"SUCCESS: Guid {testGuid} round-tripped correctly (as string).");
+        Console.WriteLine($"✅ Guid {testGuid} round-tripped correctly.\n");
     }
     else
     {
-        Console.WriteLine($"FAILURE: Guid round-trip failed. Expected {testGuid}, got {guidResult.FirstOrDefault()?.Val}");
+        Console.WriteLine($"❌ Guid round-trip failed. Expected {testGuid}, got {guidResult.FirstOrDefault()?.Val}\n");
     }
 
+    Console.WriteLine("🎉 All verification tests completed!");
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"\nEXCEPTION: {ex.Message}");
+    Console.WriteLine($"❌ Exception: {ex.Message}");
     Console.WriteLine(ex.StackTrace);
+    return 1;
 }
 
+return 0;
+
+// DTOs for verification results
 public class DecimalResult
 {
     public decimal Val { get; set; }
@@ -99,5 +89,5 @@ public class UserDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
-    public bool IsActive { get; set; } // Maps from is_active
+    public bool IsActive { get; set; }
 }
