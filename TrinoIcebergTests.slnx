@@ -5,6 +5,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AthenaTrinoClient/AthenaTrinoClient.csproj" />
+    <Project Path="src/S3Client/S3Client.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IntegrationTests/IntegrationTests.csproj" />
