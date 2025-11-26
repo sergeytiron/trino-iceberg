@@ -27,24 +27,24 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
 
         // People (simple types) - using shared_data with rows 1-3
-        var people = await client.Query<PersonDto>($"SELECT id, name, age, active FROM shared_data WHERE id <= 3 ORDER BY id", TestContext.Current.CancellationToken);
+        var people = await client.QueryAsync<PersonDto>($"SELECT id, name, age, active FROM shared_data WHERE id <= 3 ORDER BY id", TestContext.Current.CancellationToken);
         Assert.Equal(3, people.Count);
         Assert.True(people[0].Active);
         Assert.False(people[1].Active);
 
         // Contacts (null handling) - using shared_data with rows 1-3
-        var contacts = await client.Query<ContactDto>($"SELECT id, name, email, phone FROM shared_data WHERE id <= 3 ORDER BY id", TestContext.Current.CancellationToken);
+        var contacts = await client.QueryAsync<ContactDto>($"SELECT id, name, email, phone FROM shared_data WHERE id <= 3 ORDER BY id", TestContext.Current.CancellationToken);
         Assert.Equal(3, contacts.Count);
         Assert.Null(contacts[1].Email); // Bob email null
         Assert.Null(contacts[2].Phone); // Charlie phone null
 
         // Employees (snake_case mapping) - using employee_data
-        var employees = await client.Query<EmployeeDto>($"SELECT employee_id, first_name, last_name, hire_date FROM employee_data ORDER BY employee_id", TestContext.Current.CancellationToken);
+        var employees = await client.QueryAsync<EmployeeDto>($"SELECT employee_id, first_name, last_name, hire_date FROM employee_data ORDER BY employee_id", TestContext.Current.CancellationToken);
         Assert.Equal(2, employees.Count);
         Assert.Equal(1, employees[0].EmployeeId);
 
         // Empty result (id > 999)
-        var empty = await client.Query<PersonDto>($"SELECT id, name, age, active FROM shared_data WHERE id > 999", TestContext.Current.CancellationToken);
+        var empty = await client.QueryAsync<PersonDto>($"SELECT id, name, age, active FROM shared_data WHERE id > 999", TestContext.Current.CancellationToken);
         Assert.Empty(empty);
     }
 
@@ -54,20 +54,20 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
 
         // Measurements numeric - using shared_data row 4 (id=100)
-        var measurements = await client.Query<MeasurementDto>($"SELECT id, value_int, value_double, value_decimal FROM shared_data WHERE id = 100", TestContext.Current.CancellationToken);
+        var measurements = await client.QueryAsync<MeasurementDto>($"SELECT id, value_int, value_double, value_decimal FROM shared_data WHERE id = 100", TestContext.Current.CancellationToken);
         Assert.Single(measurements);
         Assert.Equal(9223372036854775807L, measurements[0].ValueInt);
         Assert.Equal(3.14159, measurements[0].ValueDouble, precision: 5);
         Assert.NotNull(measurements[0].ValueDecimal);
 
         // Messages escaping (parameterized string) - using shared_data row 2
-        var escaped = await client.Query<MessageDto>($"SELECT id, content FROM shared_data WHERE content = {"It's a test"}", TestContext.Current.CancellationToken);
+        var escaped = await client.QueryAsync<MessageDto>($"SELECT id, content FROM shared_data WHERE content = {"It's a test"}", TestContext.Current.CancellationToken);
         Assert.Single(escaped);
         Assert.Equal("It's a test", escaped[0].Content);
 
         // Parameterization (users) - using shared_data row 2
         var userId = 2;
-        var users = await client.Query<UserDto>($"SELECT id, username FROM shared_data WHERE id = {userId}", TestContext.Current.CancellationToken);
+        var users = await client.QueryAsync<UserDto>($"SELECT id, username FROM shared_data WHERE id = {userId}", TestContext.Current.CancellationToken);
         Assert.Single(users);
         Assert.Equal(2, users[0].Id);
         Assert.Equal("bob", users[0].Username);
@@ -79,7 +79,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
         var exportPath = "exports/sales";
         var category = "B";
-        var response = await client.Unload($"SELECT * FROM category_data WHERE category = {category}", exportPath, TestContext.Current.CancellationToken);
+        var response = await client.UnloadAsync($"SELECT * FROM category_data WHERE category = {category}", exportPath, TestContext.Current.CancellationToken);
         Assert.Equal(2, response.RowCount);
         Assert.Equal("s3://warehouse/exports/sales", response.S3AbsolutePath);
     }
@@ -110,7 +110,7 @@ public class AthenaClientTests
         var filterUpperBound = new DateTime(2025, 11, 17, 10, 07, 00, DateTimeKind.Utc);
 
         // Act - time travel query with DateTime parameters (AthenaClient handles formatting)
-        var results = await client.Query<EventDto>(
+        var results = await client.QueryAsync<EventDto>(
             $"SELECT event_id, event_type, event_time FROM events_time_travel FOR TIMESTAMP AS OF TIMESTAMP {timeTravelInstant} WHERE event_time < {filterUpperBound} ORDER BY event_id",
             TestContext.Current.CancellationToken
         );

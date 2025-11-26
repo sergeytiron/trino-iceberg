@@ -42,7 +42,7 @@ public class AthenaClient : IAthenaClient
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>A list of deserialized objects of type T.</returns>
-    public async Task<List<T>> Query<T>(FormattableString query, CancellationToken cancellationToken = default)
+    public async Task<List<T>> QueryAsync<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
         var sql = _parameterFormatter.ConvertFormattableStringToParameterizedQuery(query);
         var executor = await ExecuteStatementAsync(sql, cancellationToken);
@@ -56,7 +56,7 @@ public class AthenaClient : IAthenaClient
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>The scalar value, or default(T) if no rows or null.</returns>
-    public async Task<T?> QueryScalar<T>(FormattableString query, CancellationToken cancellationToken = default)
+    public async Task<T?> QueryScalarAsync<T>(FormattableString query, CancellationToken cancellationToken = default)
     {
         var sql = _parameterFormatter.ConvertFormattableStringToParameterizedQuery(query);
         var executor = await ExecuteStatementAsync(sql, cancellationToken);
@@ -98,7 +98,7 @@ public class AthenaClient : IAthenaClient
     /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>An UnloadResponse containing the row count and absolute S3 path.</returns>
-    public async Task<UnloadResponse> Unload(
+    public async Task<UnloadResponse> UnloadAsync(
         FormattableString query,
         string s3RelativePath,
         CancellationToken cancellationToken = default

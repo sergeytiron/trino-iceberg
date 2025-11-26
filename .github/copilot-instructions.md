@@ -60,11 +60,11 @@ public class MyTests(TrinoIcebergStackFixture fixture)
         
         // Use AthenaClient for type-safe SELECT queries
         var client = new AthenaClient(new Uri(fixture.Stack.TrinoEndpoint), "iceberg", "demo");
-        var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
+        var rows = await client.QueryAsync<NumberDto>($"SELECT * FROM numbers ORDER BY n");
         
-        // Use QueryScalar for single-value results (aggregates, counts, etc.)
-        var count = await client.QueryScalar<long>($"SELECT count(*) FROM numbers");
-        var max = await client.QueryScalar<int?>($"SELECT max(n) FROM numbers");
+        // Use QueryScalarAsync for single-value results (aggregates, counts, etc.)
+        var count = await client.QueryScalarAsync<long>($"SELECT count(*) FROM numbers");
+        var max = await client.QueryScalarAsync<int?>($"SELECT max(n) FROM numbers");
     }
 }
 ```
@@ -76,4 +76,3 @@ public class MyTests(TrinoIcebergStackFixture fixture)
 - Validation script: `validate.sh`
 
 If anything here is unclear or missing (e.g., adding JDBC-backed Nessie, auth, TLS), tell me what you're trying to do and I'll extend these instructions.
-```

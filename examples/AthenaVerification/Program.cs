@@ -17,7 +17,7 @@ try
     // 1. Verify Decimal Formatting (Invariant Culture)
     Console.WriteLine("🔢 Test 1: Decimal Formatting...");
     decimal testDecimal = 123.456m;
-    var decimalResult = await client.Query<DecimalResult>($"SELECT {testDecimal} as val");
+    var decimalResult = await client.QueryAsync<DecimalResult>($"SELECT {testDecimal} as val");
 
     if (decimalResult.Count == 1 && decimalResult[0].Val == testDecimal)
     {
@@ -30,7 +30,7 @@ try
 
     // 2. Verify Object Mapping
     Console.WriteLine("🗺️ Test 2: Object Mapping...");
-    var mapResult = await client.Query<UserDto>($"SELECT 1 as id, 'Test User' as name, true as is_active");
+    var mapResult = await client.QueryAsync<UserDto>($"SELECT 1 as id, 'Test User' as name, true as is_active");
 
     if (mapResult.Count == 1)
     {
@@ -52,7 +52,7 @@ try
     // 3. Verify Guid Support
     Console.WriteLine("🆔 Test 3: Guid Formatting...");
     Guid testGuid = Guid.NewGuid();
-    var guidResult = await client.Query<StringResult>($"SELECT {testGuid} as val");
+    var guidResult = await client.QueryAsync<StringResult>($"SELECT {testGuid} as val");
 
     if (guidResult.Count == 1 && guidResult[0].Val == testGuid.ToString())
     {
