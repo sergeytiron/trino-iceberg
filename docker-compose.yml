@@ -63,8 +63,17 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
-    volumes:
-      - ./trino/etc:/etc/trino:ro
+    configs:
+      - source: trino-config
+        target: /etc/trino/config.properties
+      - source: trino-node
+        target: /etc/trino/node.properties
+      - source: trino-jvm
+        target: /etc/trino/jvm.config
+      - source: trino-log
+        target: /etc/trino/log.properties
+      - source: trino-iceberg-catalog
+        target: /etc/trino/catalog/iceberg.properties
     healthcheck:
       test: ["CMD", "trino", "--execute", "SELECT 1"]
       interval: 10s
@@ -74,3 +83,46 @@ services:
 
 volumes:
   minio_data: {}
+
+configs:
+  trino-config:
+    content: |
+      coordinator=true
+      node-scheduler.include-coordinator=true
+      http-server.http.port=8080
+      discovery.uri=http://localhost:8080
+
+  trino-node:
+    content: |
+      node.environment=docker
+      node.id=trino-coordinator
+
+  trino-jvm:
+    content: |
+      -server
+      -Xmx2G
+      -XX:InitialRAMPercentage=80
+      -XX:MaxRAMPercentage=80
+      -XX:+UseG1GC
+      -XX:G1HeapRegionSize=32M
+      -XX:+ExplicitGCInvokesConcurrent
+      -XX:+HeapDumpOnOutOfMemoryError
+      -XX:+ExitOnOutOfMemoryError
+      -Djdk.attach.allowAttachSelf=true
+
+  trino-log:
+    content: |
+      io.trino=INFO
+
+  trino-iceberg-catalog:
+    content: |
+      connector.name=iceberg
+      iceberg.catalog.type=nessie
+      iceberg.nessie-catalog.uri=http://nessie:19120/api/v2
+      iceberg.nessie-catalog.default-warehouse-dir=s3://warehouse/
+      fs.native-s3.enabled=true
+      s3.endpoint=http://minio:9000
+      s3.region=us-east-1
+      s3.path-style-access=true
+      s3.aws-access-key=minioadmin
+      s3.aws-secret-key=minioadmin
