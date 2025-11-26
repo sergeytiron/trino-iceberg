@@ -32,4 +32,26 @@ public interface IS3Client : IDisposable
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A list of S3 object metadata.</returns>
     Task<List<S3ObjectInfo>> ListFilesAsync(string? prefix = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Copies an object from one S3 key to another within the same bucket.
+    /// </summary>
+    /// <param name="sourceKey">The source S3 object key.</param>
+    /// <param name="destinationKey">The destination S3 object key.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    Task CopyObjectAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes an object from S3.
+    /// </summary>
+    /// <param name="key">The S3 object key to delete.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    Task DeleteObjectAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes multiple objects from S3.
+    /// </summary>
+    /// <param name="keys">The S3 object keys to delete.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    Task DeleteObjectsAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default);
 }

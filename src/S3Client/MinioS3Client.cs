@@ -129,6 +129,57 @@ public sealed class MinioS3Client : IS3Client
         return results;
     }
 
+    /// <inheritdoc />
+    public async Task CopyObjectAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationKey);
+
+        var request = new CopyObjectRequest
+        {
+            SourceBucket = _bucketName,
+            SourceKey = sourceKey,
+            DestinationBucket = _bucketName,
+            DestinationKey = destinationKey
+        };
+
+        await _s3Client.CopyObjectAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteObjectAsync(string key, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var request = new DeleteObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = key
+        };
+
+        await _s3Client.DeleteObjectAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteObjectsAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+
+        var keysList = keys.ToList();
+        if (keysList.Count == 0)
+        {
+            return;
+        }
+
+        var request = new DeleteObjectsRequest
+        {
+            BucketName = _bucketName,
+            Objects = keysList.Select(k => new KeyVersion { Key = k }).ToList()
+        };
+
+        await _s3Client.DeleteObjectsAsync(request, cancellationToken);
+    }
+
     /// <summary>
     /// Disposes the underlying S3 client.
     /// </summary>

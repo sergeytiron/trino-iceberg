@@ -1,6 +1,7 @@
 using AthenaTrinoClient.Formatting;
 using AthenaTrinoClient.Mapping;
 using AthenaTrinoClient.Models;
+using S3Client;
 using Trino.Client;
 
 namespace AthenaTrinoClient;
@@ -13,6 +14,7 @@ public class AthenaClient : IAthenaClient
     private readonly ClientSession _session;
     private readonly SqlParameterFormatter _parameterFormatter;
     private readonly QueryResultMapper _resultMapper;
+    private readonly IS3Client? _s3Client;
 
     /// <summary>
     /// Creates a new TrinoClient with the specified connection parameters.
@@ -21,6 +23,18 @@ public class AthenaClient : IAthenaClient
     /// <param name="catalog">The default catalog to use.</param>
     /// <param name="schema">The default schema to use.</param>
     public AthenaClient(Uri trinoEndpoint, string catalog, string schema)
+        : this(trinoEndpoint, catalog, schema, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new TrinoClient with the specified connection parameters and S3 client.
+    /// </summary>
+    /// <param name="trinoEndpoint">The Trino server endpoint URI.</param>
+    /// <param name="catalog">The default catalog to use.</param>
+    /// <param name="schema">The default schema to use.</param>
+    /// <param name="s3Client">The S3 client for UnloadAsync operations. Required for UnloadAsync to work.</param>
+    public AthenaClient(Uri trinoEndpoint, string catalog, string schema, IS3Client? s3Client)
     {
         _session = new ClientSession(
             sessionProperties: new ClientSessionProperties
@@ -33,6 +47,7 @@ public class AthenaClient : IAthenaClient
         );
         _parameterFormatter = new SqlParameterFormatter();
         _resultMapper = new QueryResultMapper();
+        _s3Client = s3Client;
     }
 
     /// <summary>
@@ -92,33 +107,43 @@ public class AthenaClient : IAthenaClient
 
     /// <summary>
     /// Executes a query and unloads the results to S3 in Parquet format.
-    /// Mimics AWS Athena UNLOAD by creating a temporary Iceberg table and using INSERT INTO.
+    /// Creates a temporary Iceberg table, then copies only the data files (not metadata) to the target path.
     /// </summary>
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
     /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>An UnloadResponse containing the row count and absolute S3 path.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when S3 client is not configured or operation fails.</exception>
     public async Task<UnloadResponse> UnloadAsync(
         FormattableString query,
         string s3RelativePath,
         CancellationToken cancellationToken = default
     )
     {
+        if (_s3Client is null)
+        {
+            throw new InvalidOperationException(
+                "S3 client is required for UnloadAsync. Use the constructor that accepts IS3Client."
+            );
+        }
+
         var sql = _parameterFormatter.ConvertFormattableStringToParameterizedQuery(query);
 
-        // Generate a unique table name for the export
+        // Generate a unique table name and temp path for the export
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         var guid = Guid.NewGuid().ToString("N")[..8];
         var exportTableName = $"unload_temp_{timestamp}_{guid}";
-        var absolutePath = $"s3://warehouse/{s3RelativePath}";
+        var tempPath = $"_unload_temp/{exportTableName}";
+        var absoluteTempPath = $"s3://warehouse/{tempPath}";
+        var absoluteTargetPath = $"s3://warehouse/{s3RelativePath}";
 
         try
         {
-            // Step 1: Create a temporary table with the query results location
+            // Step 1: Create a temporary table with the query results in temp location
             var createTableSql =
                 $"""
                 CREATE TABLE {exportTableName}
-                WITH (location = '{absolutePath}', format = 'PARQUET')
+                WITH (location = '{absoluteTempPath}', format = 'PARQUET')
                 AS {sql}
                 """;
 
@@ -135,7 +160,19 @@ public class AthenaClient : IAthenaClient
                 }
             }
 
-            // Step 2: Drop the temporary table (keeps the data files in S3)
+            // Step 2: Copy only data files from temp/data/ to target path
+            var dataPrefix = $"{tempPath}/data/";
+            var dataFiles = await _s3Client.ListFilesAsync(dataPrefix, cancellationToken);
+
+            foreach (var file in dataFiles)
+            {
+                // Get just the filename from the data folder
+                var fileName = file.Key[(file.Key.LastIndexOf('/') + 1)..];
+                var targetKey = s3RelativePath.TrimEnd('/') + "/" + fileName;
+                await _s3Client.CopyObjectAsync(file.Key, targetKey, cancellationToken);
+            }
+
+            // Step 3: Drop the temporary table (keeps the data files in temp location)
             try
             {
                 await ExecuteStatementAsync($"DROP TABLE {exportTableName}", cancellationToken);
@@ -145,12 +182,26 @@ public class AthenaClient : IAthenaClient
                 // If drop fails, the table will be cleaned up eventually
             }
 
-            return new UnloadResponse(rowCount, absolutePath);
+            // Step 4: Clean up temp files
+            try
+            {
+                var allTempFiles = await _s3Client.ListFilesAsync(tempPath, cancellationToken);
+                if (allTempFiles.Count > 0)
+                {
+                    await _s3Client.DeleteObjectsAsync(allTempFiles.Select(f => f.Key), cancellationToken);
+                }
+            }
+            catch
+            {
+                // If cleanup fails, temp files will remain but won't affect the result
+            }
+
+            return new UnloadResponse(rowCount, absoluteTargetPath);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not InvalidOperationException)
         {
             throw new InvalidOperationException(
-                $"Failed to unload query results to '{absolutePath}'. "
+                $"Failed to unload query results to '{absoluteTargetPath}'. "
                     + "Ensure the S3 bucket is accessible and the query is valid.",
                 ex
             );
