@@ -26,5 +26,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AthenaTrinoClient\AthenaTrinoClient.csproj" />
+    <ProjectReference Include="..\..\src\S3Client\S3Client.csproj" />
   </ItemGroup>
 </Project>

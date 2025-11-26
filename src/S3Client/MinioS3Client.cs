@@ -7,11 +7,10 @@ namespace S3Client;
 /// <summary>
 /// S3 client implementation configured for MinIO compatibility.
 /// </summary>
-public class MinioS3Client : IS3Client
+public sealed class MinioS3Client : IS3Client
 {
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
-    private bool _disposed;
 
     /// <summary>
     /// Creates a new MinIO S3 client.
@@ -87,7 +86,7 @@ public class MinioS3Client : IS3Client
         };
 
         using var response = await _s3Client.GetObjectAsync(request, cancellationToken);
-        
+
         // Ensure the directory exists
         var directory = Path.GetDirectoryName(localFilePath);
         if (!string.IsNullOrEmpty(directory))
@@ -135,23 +134,6 @@ public class MinioS3Client : IS3Client
     /// </summary>
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Disposes the underlying S3 client.
-    /// </summary>
-    /// <param name="disposing">True if called from Dispose(), false if called from finalizer.</param>
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                _s3Client.Dispose();
-            }
-            _disposed = true;
-        }
+        _s3Client.Dispose();
     }
 }
