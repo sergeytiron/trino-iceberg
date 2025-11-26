@@ -69,9 +69,28 @@ public class MyTests(TrinoIcebergStackFixture fixture)
 }
 ```
 
+## S3Client Library
+The `src/S3Client/` project provides direct S3/MinIO access:
+- `IS3Client` interface with `UploadFileAsync`, `DownloadFileAsync`, `ListFilesAsync`
+- `MinioS3Client` implementation using AWSSDK.S3 with path-style addressing
+- Integration tests in `tests/IntegrationTests/S3ClientTests.cs`
+
+Example usage in tests:
+```csharp
+var s3Client = new MinioS3Client(
+    endpoint: new Uri(fixture.Stack.MinioEndpoint),
+    accessKey: "minioadmin",
+    secretKey: "minioadmin",
+    bucketName: "warehouse"
+);
+await s3Client.UploadFileAsync(localPath, "path/in/s3/file.txt");
+var files = await s3Client.ListFilesAsync("path/in/s3/");
+```
+
 ## Useful Paths
 - Compose configs: `trino/etc/**`
 - Test stack: `tests/IntegrationTests/TrinoIcebergStack.cs`, `tests/IntegrationTests/TrinoConfigurationProvider.cs`
+- S3 client: `src/S3Client/IS3Client.cs`, `src/S3Client/MinioS3Client.cs`
 - Tests: `tests/IntegrationTests/`, `tests/UnitTests/`
 - Validation script: `validate.sh`
 

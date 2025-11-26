@@ -228,6 +228,44 @@ var maxAge = await client.QueryScalar<int?>($"SELECT max(age) FROM users WHERE d
 var result = await client.Unload($"SELECT * FROM users", "exports/users");
 ```
 
+## S3Client (MinIO S3 Operations)
+
+The `S3Client` library provides a simple interface for interacting with MinIO/S3-compatible storage:
+
+### Key Features
+
+- **Upload files**: Upload local files to S3
+- **Download files**: Download S3 objects to local files
+- **List files**: List objects with optional prefix filtering
+- **MinIO compatible**: Configured for path-style addressing
+
+### Quick Example
+
+```csharp
+using S3Client;
+
+// Create an S3 client for MinIO
+var s3Client = new MinioS3Client(
+    endpoint: new Uri("http://localhost:9000"),
+    accessKey: "minioadmin",
+    secretKey: "minioadmin",
+    bucketName: "warehouse"
+);
+
+// Upload a file
+await s3Client.UploadFileAsync("local/path/file.txt", "remote/path/file.txt");
+
+// Download a file
+await s3Client.DownloadFileAsync("remote/path/file.txt", "local/download/file.txt");
+
+// List files with prefix
+var files = await s3Client.ListFilesAsync("remote/path/");
+foreach (var file in files)
+{
+    Console.WriteLine($"{file.Key}: {file.Size} bytes");
+}
+```
+
 ## File layout
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config
@@ -238,7 +276,12 @@ var result = await client.Unload($"SELECT * FROM users", "exports/users");
   - `IAthenaClient.cs`: Interface for AthenaClient
   - `TypeConversionUtilities.cs`: Utilities for type conversion and mapping
   - `UnloadResponse.cs`: Response model for UNLOAD operations
+- `src/S3Client/`: S3 client library for MinIO/S3 storage operations
+  - `IS3Client.cs`: Interface for S3 operations
+  - `MinioS3Client.cs`: MinIO-compatible S3 client implementation
+  - `Models/S3ObjectInfo.cs`: Object metadata record
 - `examples/TrinoClientExample/`: Example console application demonstrating client usage
 - `tests/`: C# Testcontainers implementation with integration tests
   - `IntegrationTests/AthenaClientTests.cs`: Comprehensive AthenaClient integration tests
+  - `IntegrationTests/S3ClientTests.cs`: S3Client integration tests
 - `TrinoIcebergTests.slnx`: .NET solution file including client, example, and tests

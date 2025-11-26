@@ -21,6 +21,7 @@ C# Testcontainers implementation of the Trino + Nessie + MinIO stack for integra
 - `xunit` - Testing framework
 - `Microsoft.NET.Test.Sdk` - Test SDK
 - `Trino.Data.ADO` - Trino C# Client for ADO.NET queries
+- `AWSSDK.S3` - AWS SDK for S3 operations (used by S3Client)
 
 ## Stack Components
 
@@ -131,6 +132,38 @@ Stops and removes all containers and the network in reverse order of startup.
 ### Endpoint Properties
 - `TrinoEndpoint` - http://localhost:{mapped-port}
 - `MinioEndpoint` - http://localhost:{mapped-port}
+
+### S3Client Usage
+
+The `MinioS3Client` provides direct S3 access to MinIO for file operations:
+
+```csharp
+using S3Client;
+
+public class S3Tests(TrinoIcebergStackFixture fixture)
+{
+    [Fact]
+    public async Task CanUploadAndDownload()
+    {
+        var s3Client = new MinioS3Client(
+            endpoint: new Uri(fixture.Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: "warehouse"
+        );
+
+        // Upload a file
+        await s3Client.UploadFileAsync("local.txt", "test/file.txt");
+
+        // List files
+        var files = await s3Client.ListFilesAsync("test/");
+        Assert.Single(files);
+
+        // Download
+        await s3Client.DownloadFileAsync("test/file.txt", "downloaded.txt");
+    }
+}
+```
 
 ## Notes
 
