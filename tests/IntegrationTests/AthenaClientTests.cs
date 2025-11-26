@@ -1,4 +1,5 @@
 using AthenaTrinoClient;
+using S3Client;
 
 namespace IntegrationTests;
 
@@ -76,12 +77,156 @@ public class AthenaClientTests
     [Fact]
     public async Task Unload_WithParameters_HandlesCorrectly()
     {
-        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
-        var exportPath = "exports/sales";
+        using var s3Client = new MinioS3Client(
+            endpoint: new Uri(Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: "warehouse");
+
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
+        var exportPath = $"exports/sales_{Guid.NewGuid():N}";
         var category = "B";
         var response = await client.UnloadAsync($"SELECT * FROM category_data WHERE category = {category}", exportPath, TestContext.Current.CancellationToken);
         Assert.Equal(2, response.RowCount);
-        Assert.Equal("s3://warehouse/exports/sales", response.S3AbsolutePath);
+        Assert.Equal($"s3://warehouse/{exportPath}", response.S3AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Unload_PlacesDataFilesDirectlyAtTargetPath()
+    {
+        // Arrange
+        using var s3Client = new MinioS3Client(
+            endpoint: new Uri(Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: "warehouse");
+
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
+        var exportPath = $"exports/unload_test_{Guid.NewGuid():N}";
+
+        // Act
+        var response = await client.UnloadAsync(
+            $"SELECT id, name FROM shared_data WHERE id <= 3",
+            exportPath,
+            TestContext.Current.CancellationToken);
+
+        // Assert - verify row count
+        Assert.Equal(3, response.RowCount);
+        Assert.Equal($"s3://warehouse/{exportPath}", response.S3AbsolutePath);
+
+        // Assert - verify files are placed directly at target path (no data/ or metadata/ subfolders)
+        var files = await s3Client.ListFilesAsync(exportPath, TestContext.Current.CancellationToken);
+
+        _output.WriteLine($"Files at {exportPath}:");
+        foreach (var file in files)
+        {
+            _output.WriteLine($"  - {file.Key} ({file.Size} bytes)");
+        }
+
+        // Should have parquet files directly at the target path
+        Assert.NotEmpty(files);
+        Assert.All(files, f =>
+        {
+            // Files should be directly under exportPath, not in data/ or metadata/ subfolders
+            Assert.StartsWith(exportPath + "/", f.Key);
+            Assert.DoesNotContain("/data/", f.Key);
+            Assert.DoesNotContain("/metadata/", f.Key);
+            // Should be parquet files
+            Assert.EndsWith(".parquet", f.Key);
+        });
+    }
+
+    [Fact]
+    public async Task Unload_CleansUpTemporaryFiles()
+    {
+        // Arrange
+        using var s3Client = new MinioS3Client(
+            endpoint: new Uri(Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: "warehouse");
+
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
+        var exportPath = $"exports/cleanup_test_{Guid.NewGuid():N}";
+
+        // Act
+        var response = await client.UnloadAsync(
+            $"SELECT id, name FROM shared_data WHERE id = 1",
+            exportPath,
+            TestContext.Current.CancellationToken);
+
+        // Assert - verify the operation succeeded
+        Assert.Equal(1, response.RowCount);
+
+        // Assert - verify temp files are cleaned up
+        var tempFiles = await s3Client.ListFilesAsync("_unload_temp/", TestContext.Current.CancellationToken);
+
+        _output.WriteLine($"Temp files remaining: {tempFiles.Count}");
+        foreach (var file in tempFiles)
+        {
+            _output.WriteLine($"  - {file.Key}");
+        }
+
+        // Temp folder should be empty (or not exist) after cleanup
+        Assert.Empty(tempFiles);
+    }
+
+    [Fact]
+    public async Task Unload_WithoutS3Client_ThrowsInvalidOperationException()
+    {
+        // Arrange - create client without S3 client
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
+        var exportPath = $"exports/no_s3_test_{Guid.NewGuid():N}";
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await client.UnloadAsync(
+                $"SELECT id FROM shared_data WHERE id = 1",
+                exportPath,
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("S3 client is required", exception.Message);
+        _output.WriteLine($"Expected exception: {exception.Message}");
+    }
+
+    [Fact]
+    public async Task Unload_MultipleFiles_AllPlacedAtTargetPath()
+    {
+        // Arrange - create enough data to generate multiple parquet files
+        using var s3Client = new MinioS3Client(
+            endpoint: new Uri(Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: "warehouse");
+
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
+        var exportPath = $"exports/multi_file_test_{Guid.NewGuid():N}";
+
+        // Act - export data that includes multiple rows
+        var response = await client.UnloadAsync(
+            $"SELECT * FROM shared_data",
+            exportPath,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(response.RowCount > 0, "Expected at least one row");
+
+        var files = await s3Client.ListFilesAsync(exportPath, TestContext.Current.CancellationToken);
+
+        _output.WriteLine($"Exported {response.RowCount} rows to {files.Count} file(s):");
+        foreach (var file in files)
+        {
+            _output.WriteLine($"  - {file.Key} ({file.Size} bytes)");
+        }
+
+        // All files should be parquet files directly at target path
+        Assert.NotEmpty(files);
+        Assert.All(files, f =>
+        {
+            Assert.StartsWith(exportPath + "/", f.Key);
+            Assert.EndsWith(".parquet", f.Key);
+            Assert.True(f.Size > 0, "File should have content");
+        });
     }
 
     [Fact]
