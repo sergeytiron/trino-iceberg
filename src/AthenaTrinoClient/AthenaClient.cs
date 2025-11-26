@@ -36,23 +36,6 @@ public class AthenaClient : IAthenaClient
     }
 
     /// <summary>
-    /// Executes a SQL statement and returns the record executor for processing results.
-    /// </summary>
-    private async Task<RecordExecutor> ExecuteStatementAsync(string sql, CancellationToken cancellationToken = default)
-    {
-        return await RecordExecutor.Execute(
-            logger: null,
-            queryStatusNotifications: null,
-            session: _session,
-            statement: sql,
-            queryParameters: null,
-            bufferSize: Constants.DefaultBufferSizeBytes,
-            isQuery: true,
-            cancellationToken: cancellationToken
-        );
-    }
-
-    /// <summary>
     /// Executes a parameterized query and returns results deserialized into a list of typed objects.
     /// </summary>
     /// <typeparam name="T">The type to deserialize each row into.</typeparam>
@@ -99,7 +82,7 @@ public class AthenaClient : IAthenaClient
                 """;
 
             var createExecutor = await ExecuteStatementAsync(createTableSql, cancellationToken);
-            
+
             // Extract row count from first row
             var rowCount = 0;
             foreach (var row in createExecutor)
@@ -131,5 +114,22 @@ public class AthenaClient : IAthenaClient
                 ex
             );
         }
+    }
+
+    /// <summary>
+    /// Executes a SQL statement and returns the record executor for processing results.
+    /// </summary>
+    private async Task<RecordExecutor> ExecuteStatementAsync(string sql, CancellationToken cancellationToken = default)
+    {
+        return await RecordExecutor.Execute(
+            logger: null,
+            queryStatusNotifications: null,
+            session: _session,
+            statement: sql,
+            queryParameters: null,
+            bufferSize: Constants.DefaultBufferSizeBytes,
+            isQuery: true,
+            cancellationToken: cancellationToken
+        );
     }
 }
