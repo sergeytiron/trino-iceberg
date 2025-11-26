@@ -1,6 +1,6 @@
 # AI Coding Agents – Trino + Iceberg Repo Guide
 
-Use this guide to work productively in this repo. It documents the architecture, workflows, and project-specific conventions you’ll need to extend tests or the local stack confidently.
+Use this guide to work productively in this repo. It documents the architecture, workflows, and project-specific conventions you'll need to extend tests or the local stack confidently.
 
 ## Big Picture
 - Stack: Trino queries Iceberg via the Nessie catalog; table data lives in MinIO S3. Two ways to run:
@@ -30,7 +30,7 @@ Use this guide to work productively in this repo. It documents the architecture,
 - MinIO bucket init happens with `mc` via `Exec` in the MinIO container (no separate `mc` container):
   - `mc alias set local http://localhost:9000 ... && mc mb -p local/warehouse || true`
 - Shared fixture across tests:
-  - `TrinoIcebergStackFixture` + `[Collection("TrinoIcebergStack")]` ensures one stack per test collection.
+  - `TrinoIcebergStackFixture` is created once per test run and injected via constructor.
 - Query execution from tests uses ADO.NET via the Trino C# Client (faster than CLI exec):
   - `ExecuteNonQuery("SQL...")` → executes DDL/DML and returns rows affected
   - `ExecuteBatch(IEnumerable<string>)` → executes multiple statements with connection reuse
@@ -49,12 +49,24 @@ Use this guide to work productively in this repo. It documents the architecture,
 
 ## Example Test Flow
 ```csharp
-Stack.ExecuteNonQuery("CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
-Stack.ExecuteNonQuery("CREATE TABLE iceberg.demo.numbers (n int) WITH (format='PARQUET')");
-Stack.ExecuteNonQuery("INSERT INTO iceberg.demo.numbers VALUES (1),(2),(3)");
-// Use AthenaClient for type-safe SELECT queries
-var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", "demo");
-var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
+public class MyTests(TrinoIcebergStackFixture fixture)
+{
+    [Fact]
+    public async Task CanQueryData()
+    {
+        fixture.Stack.ExecuteNonQuery("CREATE SCHEMA IF NOT EXISTS iceberg.demo WITH (location='s3://warehouse/demo/')");
+        fixture.Stack.ExecuteNonQuery("CREATE TABLE iceberg.demo.numbers (n int) WITH (format='PARQUET')");
+        fixture.Stack.ExecuteNonQuery("INSERT INTO iceberg.demo.numbers VALUES (1),(2),(3)");
+        
+        // Use AthenaClient for type-safe SELECT queries
+        var client = new AthenaClient(new Uri(fixture.Stack.TrinoEndpoint), "iceberg", "demo");
+        var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
+        
+        // Use QueryScalar for single-value results (aggregates, counts, etc.)
+        var count = await client.QueryScalar<long>($"SELECT count(*) FROM numbers");
+        var max = await client.QueryScalar<int?>($"SELECT max(n) FROM numbers");
+    }
+}
 ```
 
 ## Useful Paths
@@ -63,4 +75,5 @@ var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
 - Tests: `tests/IntegrationTests/`, `tests/UnitTests/`
 - Validation script: `validate.sh`
 
-If anything here is unclear or missing (e.g., adding JDBC-backed Nessie, auth, TLS), tell me what you’re trying to do and I’ll extend these instructions.
+If anything here is unclear or missing (e.g., adding JDBC-backed Nessie, auth, TLS), tell me what you're trying to do and I'll extend these instructions.
+```

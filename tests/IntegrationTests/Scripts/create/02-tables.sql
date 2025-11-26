@@ -39,3 +39,15 @@ CREATE TABLE IF NOT EXISTS iceberg.common_test_data.events_time_travel (
     event_type varchar,
     event_time timestamp
 );
+
+-- scalar_test: for QueryScalar tests with various data types
+CREATE TABLE IF NOT EXISTS iceberg.common_test_data.scalar_test (
+    id int,
+    int_value int,
+    string_value varchar,
+    bool_value boolean,
+    guid_value varchar,
+    datetime_value timestamp,
+    decimal_value decimal(10,2),
+    category varchar
+);

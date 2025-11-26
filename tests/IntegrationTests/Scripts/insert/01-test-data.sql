@@ -13,3 +13,9 @@ INSERT INTO iceberg.common_test_data.category_data VALUES (100, 'A'), (200, 'B')
 INSERT INTO iceberg.common_test_data.employee_data VALUES
     (1, 'John', 'Doe', DATE '2020-01-15'),
     (2, 'Jane', 'Smith', DATE '2019-03-22');
+
+-- Populate scalar_test for QueryScalar tests
+INSERT INTO iceberg.common_test_data.scalar_test VALUES
+    (1, 10, 'apple', true, 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', TIMESTAMP '2024-01-15 10:30:00', 100.50, 'A'),
+    (2, 20, 'banana', false, 'b2c3d4e5-f6a7-8901-bcde-f12345678901', TIMESTAMP '2024-02-20 14:45:00', 200.25, 'A'),
+    (3, 30, 'cherry', true, 'c3d4e5f6-a7b8-9012-cdef-123456789012', TIMESTAMP '2024-03-25 09:15:00', 50.25, 'B');

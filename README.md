@@ -210,6 +210,24 @@ See `tests/IntegrationTests/AthenaClientTests.cs` for comprehensive examples of:
 - Null value handling
 - Snake_case column mapping
 
+## AthenaClient Usage
+
+The `AthenaClient` provides type-safe query execution with parameterization:
+
+```csharp
+var client = new AthenaClient(new Uri("http://localhost:8080"), "iceberg", "demo");
+
+// Query multiple rows with type-safe deserialization
+var users = await client.Query<User>($"SELECT * FROM users WHERE status = {"active"}");
+
+// Query a single scalar value (aggregates, counts, etc.)
+var count = await client.QueryScalar<long>($"SELECT count(*) FROM users");
+var maxAge = await client.QueryScalar<int?>($"SELECT max(age) FROM users WHERE dept = {"sales"}");
+
+// Unload query results to S3 as Parquet
+var result = await client.Unload($"SELECT * FROM users", "exports/users");
+```
+
 ## File layout
 - `docker-compose.yml`: services definitions
 - `trino/etc/*`: Trino server config

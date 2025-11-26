@@ -11,8 +11,8 @@ C# Testcontainers implementation of the Trino + Nessie + MinIO stack for integra
 
 - `TrinoIcebergStack.cs` - Main stack orchestration (mirrors docker-compose.yml)
 - `TrinoConfigurationProvider.cs` - Embedded Trino configuration (no external files needed)
-- `TrinoIcebergStackFixture.cs` - Shared fixture for test collection
-- `Scripts/init-common-schema.sql` - SQL init script for test data setup
+- `TrinoIcebergStackFixture.cs` - Shared fixture for all tests (created once per test run)
+- `Scripts/` - SQL init scripts for test data setup
 - `IntegrationTests.csproj` - Project file with NuGet references
 
 ## NuGet Packages
@@ -59,14 +59,9 @@ dotnet.exe test --logger "console;verbosity=detailed"
 ## Example Usage
 
 ```csharp
-public class MyTests : IClassFixture<TrinoIcebergStackFixture>
+public class MyTests(TrinoIcebergStackFixture fixture)
 {
-    private readonly TrinoIcebergStack _stack;
-
-    public MyTests(TrinoIcebergStackFixture fixture)
-    {
-        _stack = fixture.Stack;
-    }
+    private readonly TrinoIcebergStack _stack = fixture.Stack;
 
     [Fact]
     public async Task CanQueryIceberg()
@@ -87,7 +82,11 @@ public class MyTests : IClassFixture<TrinoIcebergStackFixture>
         var client = new AthenaClient(new Uri(_stack.TrinoEndpoint), "iceberg", "demo");
         var rows = await client.Query<NumberDto>($"SELECT * FROM numbers ORDER BY n");
 
+        // Use QueryScalar for single-value results
+        var count = await client.QueryScalar<long>($"SELECT count(*) FROM numbers");
+
         Assert.Equal(3, rows.Count);
+        Assert.Equal(3L, count);
     }
 }
 ```
@@ -144,7 +143,7 @@ Stops and removes all containers and the network in reverse order of startup.
 - Containers auto-cleanup after tests via `IAsyncDisposable` in reverse order
 - Robust disposal continues cleanup even if individual containers fail
 - Network isolation prevents conflicts between test runs
-- Use `TrinoIcebergStackFixture` with `[Collection("TrinoIcebergStack")]` for shared stack across tests
+- `TrinoIcebergStackFixture` is created once per test run and injected via constructor
 
 ## Configuration
 

@@ -50,6 +50,47 @@ public class AthenaClient : IAthenaClient
     }
 
     /// <summary>
+    /// Executes a parameterized query and returns a single scalar value.
+    /// </summary>
+    /// <typeparam name="T">The type of the scalar value to return.</typeparam>
+    /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The scalar value, or default(T) if no rows or null.</returns>
+    public async Task<T?> QueryScalar<T>(FormattableString query, CancellationToken cancellationToken = default)
+    {
+        var sql = _parameterFormatter.ConvertFormattableStringToParameterizedQuery(query);
+        var executor = await ExecuteStatementAsync(sql, cancellationToken);
+
+        foreach (var row in executor)
+        {
+            if (row.Count > 0 && row[0] != null)
+            {
+                return ConvertScalarValue<T>(row[0]);
+            }
+            return default;
+        }
+
+        return default;
+    }
+
+    /// <summary>
+    /// Converts a scalar value to the target type, handling nullable types and special types.
+    /// </summary>
+    private static T ConvertScalarValue<T>(object value)
+    {
+        var targetType = typeof(T);
+        var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // Handle Guid specially since Convert.ChangeType doesn't support it
+        if (underlyingType == typeof(Guid))
+        {
+            return (T)(object)Guid.Parse(value.ToString()!);
+        }
+
+        return (T)Convert.ChangeType(value, underlyingType);
+    }
+
+    /// <summary>
     /// Executes a query and unloads the results to S3 in Parquet format.
     /// Mimics AWS Athena UNLOAD by creating a temporary Iceberg table and using INSERT INTO.
     /// </summary>
