@@ -9,7 +9,7 @@ namespace AthenaTrinoClient;
 /// <summary>
 /// Client for executing Trino queries with type-safe deserialization and parameterization support.
 /// </summary>
-public class AthenaClient : IAthenaClient
+public class AthenaClient
 {
     private readonly ClientSession _session;
     private readonly SqlParameterFormatter _parameterFormatter;
