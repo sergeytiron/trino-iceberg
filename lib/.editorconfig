@@ -1,0 +1,7 @@
+# Apply to all files in the submodule (path is relative to this file)
+[*/**.cs]
+# Treat as generated code (suppresses many analysis warnings)
+generated_code = true
+dotnet_diagnostic.CS0649.severity = none
+dotnet_diagnostic.CS8073.severity = none
+dotnet_diagnostic.SYSLIB0057.severity = none
