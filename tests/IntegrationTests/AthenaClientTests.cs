@@ -86,7 +86,7 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
         var exportPath = $"exports/sales_{Guid.NewGuid():N}";
         var category = "B";
-        var response = await client.UnloadAsync($"SELECT * FROM category_data WHERE category = {category}", exportPath, TestContext.Current.CancellationToken);
+        var response = await client.UnloadAsync($"SELECT * FROM category_data WHERE category = {category}", "warehouse", exportPath, TestContext.Current.CancellationToken);
         Assert.Equal(2, response.RowCount);
         Assert.Equal($"s3://warehouse/{exportPath}", response.S3AbsolutePath);
     }
@@ -107,6 +107,7 @@ public class AthenaClientTests
         // Act
         var response = await client.UnloadAsync(
             $"SELECT id, name FROM shared_data WHERE id <= 3",
+            "warehouse",
             exportPath,
             TestContext.Current.CancellationToken);
 
@@ -152,6 +153,7 @@ public class AthenaClientTests
         // Act
         var response = await client.UnloadAsync(
             $"SELECT id, name FROM shared_data WHERE id = 1",
+            "warehouse",
             exportPath,
             TestContext.Current.CancellationToken);
 
@@ -182,6 +184,7 @@ public class AthenaClientTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await client.UnloadAsync(
                 $"SELECT id FROM shared_data WHERE id = 1",
+                "warehouse",
                 exportPath,
                 TestContext.Current.CancellationToken));
 
@@ -205,6 +208,7 @@ public class AthenaClientTests
         // Act - export data that includes multiple rows
         var response = await client.UnloadAsync(
             $"SELECT * FROM shared_data",
+            "warehouse",
             exportPath,
             TestContext.Current.CancellationToken);
 
@@ -227,6 +231,64 @@ public class AthenaClientTests
             Assert.EndsWith(".parquet", f.Key);
             Assert.True(f.Size > 0, "File should have content");
         });
+    }
+
+    [Fact]
+    public async Task Unload_ToDifferentBucket_PlacesFilesInTargetBucket()
+    {
+        // Arrange - create a separate bucket for exports (different from iceberg catalog's "warehouse" bucket)
+        var exportBucketName = $"exports-{Guid.NewGuid():N}"[..20]; // bucket names have length limits
+        await Stack.CreateBucketAsync(exportBucketName, TestContext.Current.CancellationToken);
+
+        // Create S3 client for the export bucket (not the warehouse bucket)
+        using var exportS3Client = new MinioS3Client(
+            endpoint: new Uri(Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: exportBucketName);
+
+        // Create AthenaClient with the export bucket's S3 client
+        var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, exportS3Client);
+        var exportPath = $"data/export_{Guid.NewGuid():N}";
+
+        // Act - export data from iceberg catalog (warehouse bucket) to export bucket
+        var response = await client.UnloadAsync(
+            $"SELECT id, name FROM shared_data WHERE id <= 3",
+            exportBucketName,
+            exportPath,
+            TestContext.Current.CancellationToken);
+
+        // Assert - verify row count and path
+        Assert.Equal(3, response.RowCount);
+        Assert.Equal($"s3://{exportBucketName}/{exportPath}", response.S3AbsolutePath);
+
+        // Assert - verify files exist in the export bucket
+        var filesInExportBucket = await exportS3Client.ListFilesAsync(exportPath, TestContext.Current.CancellationToken);
+
+        _output.WriteLine($"Files in bucket '{exportBucketName}' at '{exportPath}':");
+        foreach (var file in filesInExportBucket)
+        {
+            _output.WriteLine($"  - {file.Key} ({file.Size} bytes)");
+        }
+
+        Assert.NotEmpty(filesInExportBucket);
+        Assert.All(filesInExportBucket, f =>
+        {
+            Assert.StartsWith(exportPath + "/", f.Key);
+            Assert.EndsWith(".parquet", f.Key);
+            Assert.True(f.Size > 0, "File should have content");
+        });
+
+        // Verify files are NOT in the warehouse bucket at the export path
+        using var warehouseS3Client = new MinioS3Client(
+            endpoint: new Uri(Stack.MinioEndpoint),
+            accessKey: "minioadmin",
+            secretKey: "minioadmin",
+            bucketName: "warehouse");
+
+        var filesInWarehouse = await warehouseS3Client.ListFilesAsync(exportPath, TestContext.Current.CancellationToken);
+        _output.WriteLine($"Files in 'warehouse' bucket at '{exportPath}': {filesInWarehouse.Count}");
+        Assert.Empty(filesInWarehouse);
     }
 
     [Fact]

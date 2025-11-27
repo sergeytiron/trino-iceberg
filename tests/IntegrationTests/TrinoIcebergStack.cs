@@ -255,6 +255,28 @@ public class TrinoIcebergStack : IAsyncDisposable
     }
 
     /// <summary>
+    /// Creates a new S3 bucket in MinIO.
+    /// </summary>
+    /// <param name="bucketName">The name of the bucket to create</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task CreateBucketAsync(string bucketName, CancellationToken cancellationToken = default)
+    {
+        var createBucketCommand =
+            $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{bucketName} || true";
+
+        var createBucketResult = await _minioContainer
+            .ExecAsync(["sh", "-c", createBucketCommand], cancellationToken)
+            .ConfigureAwait(false);
+
+        if (createBucketResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"MinIO bucket creation failed with exit code {createBucketResult.ExitCode}. Stdout: {createBucketResult.Stdout}{Environment.NewLine}Stderr: {createBucketResult.Stderr}"
+            );
+        }
+    }
+
+    /// <summary>
     /// Disposes all containers and the network in reverse order of startup.
     /// Continues cleanup even if individual disposals fail.
     /// </summary>

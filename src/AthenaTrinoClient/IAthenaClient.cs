@@ -12,11 +12,13 @@ public interface IAthenaClient
     /// Requires an S3 client to be configured via the AthenaClient constructor.
     /// </summary>
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
-    /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
+    /// <param name="s3BucketName">The S3 bucket name (e.g., "warehouse").</param>
+    /// <param name="s3RelativePath">The relative S3 path within the bucket (e.g., "exports/data").</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>An UnloadResponse containing the row count and absolute S3 path.</returns>
     Task<UnloadResponse> UnloadAsync(
         FormattableString query,
+        string s3BucketName,
         string s3RelativePath,
         CancellationToken cancellationToken = default
     );

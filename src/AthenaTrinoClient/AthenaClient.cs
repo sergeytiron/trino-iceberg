@@ -110,12 +110,14 @@ public class AthenaClient : IAthenaClient
     /// Creates a temporary Iceberg table, then copies only the data files (not metadata) to the target path.
     /// </summary>
     /// <param name="query">The parameterized SQL query using FormattableString interpolation.</param>
-    /// <param name="s3RelativePath">The relative S3 path within the warehouse bucket (e.g., "exports/data").</param>
+    /// <param name="s3BucketName">The S3 bucket name (e.g., "warehouse").</param>
+    /// <param name="s3RelativePath">The relative S3 path within the bucket (e.g., "exports/data").</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>An UnloadResponse containing the row count and absolute S3 path.</returns>
     /// <exception cref="InvalidOperationException">Thrown when S3 client is not configured or operation fails.</exception>
     public async Task<UnloadResponse> UnloadAsync(
         FormattableString query,
+        string s3BucketName,
         string s3RelativePath,
         CancellationToken cancellationToken = default
     )
@@ -134,8 +136,8 @@ public class AthenaClient : IAthenaClient
         var guid = Guid.NewGuid().ToString("N")[..8];
         var exportTableName = $"unload_temp_{timestamp}_{guid}";
         var tempPath = $"_unload_temp/{exportTableName}";
-        var absoluteTempPath = $"s3://warehouse/{tempPath}";
-        var absoluteTargetPath = $"s3://warehouse/{s3RelativePath}";
+        var absoluteTempPath = $"s3://{s3BucketName}/{tempPath}";
+        var absoluteTargetPath = $"s3://{s3BucketName}/{s3RelativePath}";
 
         try
         {
