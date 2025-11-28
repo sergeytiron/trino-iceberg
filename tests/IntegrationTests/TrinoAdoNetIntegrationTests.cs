@@ -65,7 +65,12 @@ public class TrinoAdoNetIntegrationTests
         }
 
         // Contacts pattern for null value handling (shared_data rows 1-3)
-        using (var cmdNulls = new TrinoCommand(connection, "SELECT id, email, phone FROM shared_data WHERE id <= 3 ORDER BY id"))
+        using (
+            var cmdNulls = new TrinoCommand(
+                connection,
+                "SELECT id, email, phone FROM shared_data WHERE id <= 3 ORDER BY id"
+            )
+        )
         using (var readerNulls = cmdNulls.ExecuteReader())
         {
             int rowIndex = 0;
@@ -87,7 +92,12 @@ public class TrinoAdoNetIntegrationTests
         }
 
         // Schema metadata check (employee_data)
-        using (var cmdSchema = new TrinoCommand(connection, "SELECT employee_id, first_name, last_name, hire_date FROM employee_data"))
+        using (
+            var cmdSchema = new TrinoCommand(
+                connection,
+                "SELECT employee_id, first_name, last_name, hire_date FROM employee_data"
+            )
+        )
         using (var readerSchema = cmdSchema.ExecuteReader())
         {
             Assert.Equal(4, readerSchema.FieldCount);
@@ -102,7 +112,10 @@ public class TrinoAdoNetIntegrationTests
     {
         using var connection = CreateConnection(SchemaName);
         connection.Open();
-        using var command = new TrinoCommand(connection, "SELECT category, SUM(amount) FROM category_data GROUP BY category ORDER BY category");
+        using var command = new TrinoCommand(
+            connection,
+            "SELECT category, SUM(amount) FROM category_data GROUP BY category ORDER BY category"
+        );
         using var reader = command.ExecuteReader();
         var results = new List<(string Cat, long Total)>();
         while (reader.Read())

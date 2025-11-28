@@ -127,17 +127,16 @@ public class TrinoIcebergStack : IAsyncDisposable
 
         // Start MinIO and Nessie in parallel - they don't depend on each other
         await Task.WhenAll(
-            _minioContainer.StartAsync(cancellationToken),
-            _nessieContainer.StartAsync(cancellationToken)
-        ).ConfigureAwait(false);
+                _minioContainer.StartAsync(cancellationToken),
+                _nessieContainer.StartAsync(cancellationToken)
+            )
+            .ConfigureAwait(false);
 
         // Initialize MinIO bucket and start Trino in parallel
         // Trino JVM startup takes ~30s and doesn't need the bucket until first query
         // Bucket init is fast (~2s) and will complete before Trino is ready to query
-        await Task.WhenAll(
-            InitializeMinIOBucketAsync(cancellationToken),
-            _trinoContainer.StartAsync(cancellationToken)
-        ).ConfigureAwait(false);
+        await Task.WhenAll(InitializeMinIOBucketAsync(cancellationToken), _trinoContainer.StartAsync(cancellationToken))
+            .ConfigureAwait(false);
 
         // Execute init scripts after Trino is ready (auto-discovered from Scripts/create and Scripts/insert)
         await ExecuteInitScriptsAsync(cancellationToken).ConfigureAwait(false);
@@ -172,8 +171,11 @@ public class TrinoIcebergStack : IAsyncDisposable
 
             var scriptContent = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
             // 644 = Owner RW, Group R, Others R
-            const UnixFileModes fileMode644 = UnixFileModes.UserRead | UnixFileModes.UserWrite | UnixFileModes.GroupRead | UnixFileModes.OtherRead;
-            await _trinoContainer.CopyAsync(scriptContent, containerScriptPath, fileMode644, cancellationToken).ConfigureAwait(false);
+            const UnixFileModes fileMode644 =
+                UnixFileModes.UserRead | UnixFileModes.UserWrite | UnixFileModes.GroupRead | UnixFileModes.OtherRead;
+            await _trinoContainer
+                .CopyAsync(scriptContent, containerScriptPath, fileMode644, cancellationToken)
+                .ConfigureAwait(false);
             _logger?.Invoke($"Copied {fileName} to container at {containerScriptPath}");
 
             // Execute the script using Trino CLI
@@ -185,10 +187,10 @@ public class TrinoIcebergStack : IAsyncDisposable
             if (result.ExitCode != 0)
             {
                 throw new InvalidOperationException(
-                    $"Init script execution failed for {fileName} with exit code {result.ExitCode}.{Environment.NewLine}" +
-                    $"Command: {trinoCliCommand}{Environment.NewLine}" +
-                    $"Stdout: {result.Stdout}{Environment.NewLine}" +
-                    $"Stderr: {result.Stderr}"
+                    $"Init script execution failed for {fileName} with exit code {result.ExitCode}.{Environment.NewLine}"
+                        + $"Command: {trinoCliCommand}{Environment.NewLine}"
+                        + $"Stdout: {result.Stdout}{Environment.NewLine}"
+                        + $"Stderr: {result.Stderr}"
                 );
             }
 
@@ -214,7 +216,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         {
             Server = new Uri(TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = schema!
+            Schema = schema!,
         };
 
         using var connection = new TrinoConnection(properties);
@@ -235,7 +237,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         {
             Server = new Uri(TrinoEndpoint),
             Catalog = "iceberg",
-            Schema = schema!
+            Schema = schema!,
         };
 
         using var connection = new TrinoConnection(properties);
@@ -244,11 +246,13 @@ public class TrinoIcebergStack : IAsyncDisposable
         var tasks = new List<Task>();
         foreach (var sql in sqlStatements)
         {
-            tasks.Add(Task.Run(() =>
-            {
-                using var command = new TrinoCommand(connection, sql);
-                return command.ExecuteNonQuery();
-            }));
+            tasks.Add(
+                Task.Run(() =>
+                {
+                    using var command = new TrinoCommand(connection, sql);
+                    return command.ExecuteNonQuery();
+                })
+            );
         }
 
         Task.WaitAll([.. tasks]);

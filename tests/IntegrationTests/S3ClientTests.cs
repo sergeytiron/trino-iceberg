@@ -32,7 +32,8 @@ public class S3ClientTests : IAsyncLifetime
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: "warehouse");
+            bucketName: "warehouse"
+        );
 
         _output.WriteLine($"MinIO endpoint: {Stack.MinioEndpoint}");
         _output.WriteLine($"Temp directory: {_tempDirectory}");
@@ -171,8 +172,9 @@ public class S3ClientTests : IAsyncLifetime
         var nonExistentFile = Path.Combine(_tempDirectory, "does-not-exist.txt");
 
         // Act & Assert
-        await Assert.ThrowsAsync<FileNotFoundException>(
-            () => _s3Client.UploadFileAsync(nonExistentFile, "any-key", TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+            _s3Client.UploadFileAsync(nonExistentFile, "any-key", TestContext.Current.CancellationToken)
+        );
     }
 
     [Fact]
@@ -183,8 +185,9 @@ public class S3ClientTests : IAsyncLifetime
         var downloadPath = Path.Combine(_tempDirectory, "should-not-exist.txt");
 
         // Act & Assert
-        await Assert.ThrowsAsync<Amazon.S3.AmazonS3Exception>(
-            () => _s3Client.DownloadFileAsync(nonExistentKey, downloadPath, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<Amazon.S3.AmazonS3Exception>(() =>
+            _s3Client.DownloadFileAsync(nonExistentKey, downloadPath, TestContext.Current.CancellationToken)
+        );
     }
 
     [Fact]

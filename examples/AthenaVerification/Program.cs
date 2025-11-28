@@ -25,7 +25,9 @@ try
     }
     else
     {
-        Console.WriteLine($"❌ Decimal round-trip failed. Expected {testDecimal}, got {decimalResult.FirstOrDefault()?.Val}\n");
+        Console.WriteLine(
+            $"❌ Decimal round-trip failed. Expected {testDecimal}, got {decimalResult.FirstOrDefault()?.Val}\n"
+        );
     }
 
     // 2. Verify Object Mapping
@@ -41,7 +43,9 @@ try
         }
         else
         {
-            Console.WriteLine($"❌ Object mapping mismatch. Got: Id={user.Id}, Name={user.Name}, IsActive={user.IsActive}\n");
+            Console.WriteLine(
+                $"❌ Object mapping mismatch. Got: Id={user.Id}, Name={user.Name}, IsActive={user.IsActive}\n"
+            );
         }
     }
     else

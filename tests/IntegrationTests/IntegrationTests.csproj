@@ -6,7 +6,6 @@
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -15,15 +14,12 @@
     <PackageReference Include="xunit.v3.core" Version="3.2.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
-
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
-
   <ItemGroup>
     <None Include="Scripts\**\*.sql" CopyToOutputDirectory="Always" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\AthenaTrinoClient\AthenaTrinoClient.csproj" />
     <ProjectReference Include="..\..\src\S3Client\S3Client.csproj" />

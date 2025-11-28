@@ -22,6 +22,7 @@ public interface IAthenaClient
         string s3RelativePath,
         CancellationToken cancellationToken = default
     );
+
     /// <summary>
     /// Executes a parameterized query and returns a single scalar value.
     /// </summary>

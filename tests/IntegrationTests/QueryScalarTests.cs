@@ -15,7 +15,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithInt_ReturnsCorrectValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<int>($"SELECT max(int_value) FROM scalar_test", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<int>(
+            $"SELECT max(int_value) FROM scalar_test",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Equal(30, result);
@@ -25,7 +28,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithNullableInt_ReturnsValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<int?>($"SELECT min(int_value) FROM scalar_test", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<int?>(
+            $"SELECT min(int_value) FROM scalar_test",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Equal(10, result);
@@ -35,7 +41,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithNullableInt_ReturnsNull()
     {
         // Act
-        var result = await _client.QueryScalarAsync<int?>($"SELECT max(int_value) FROM scalar_test WHERE id = 999", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<int?>(
+            $"SELECT max(int_value) FROM scalar_test WHERE id = 999",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Null(result);
@@ -45,7 +54,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithString_ReturnsCorrectValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<string>($"SELECT min(string_value) FROM scalar_test", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<string>(
+            $"SELECT min(string_value) FROM scalar_test",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Equal("apple", result);
@@ -55,7 +67,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithBool_ReturnsCorrectValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<bool>($"SELECT bool_value FROM scalar_test WHERE id = 1", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<bool>(
+            $"SELECT bool_value FROM scalar_test WHERE id = 1",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.True(result);
@@ -65,7 +80,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithGuid_ReturnsCorrectValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<Guid>($"SELECT guid_value FROM scalar_test WHERE id = 1", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<Guid>(
+            $"SELECT guid_value FROM scalar_test WHERE id = 1",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Equal(Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), result);
@@ -75,7 +93,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithDateTime_ReturnsCorrectValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<DateTime>($"SELECT datetime_value FROM scalar_test WHERE id = 1", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<DateTime>(
+            $"SELECT datetime_value FROM scalar_test WHERE id = 1",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Equal(new DateTime(2024, 1, 15, 10, 30, 0), result);
@@ -85,7 +106,10 @@ public class QueryScalarTests
     public async Task QueryScalar_WithDecimal_ReturnsCorrectValue()
     {
         // Act
-        var result = await _client.QueryScalarAsync<decimal>($"SELECT sum(decimal_value) FROM scalar_test", TestContext.Current.CancellationToken);
+        var result = await _client.QueryScalarAsync<decimal>(
+            $"SELECT sum(decimal_value) FROM scalar_test",
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.Equal(351.00m, result);

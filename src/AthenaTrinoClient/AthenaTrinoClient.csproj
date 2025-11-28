@@ -4,24 +4,24 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-
   <ItemGroup>
     <!-- Include all Trino.Client source files recursively, excluding build artifacts -->
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\**\*.cs" 
-             Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\obj\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\bin\**"
-             Link="TrinoClient\%(RecursiveDir)%(Filename)%(Extension)" />
-    
+    <Compile
+      Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\**\*.cs"
+      Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\obj\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Client\bin\**"
+      Link="TrinoClient\%(RecursiveDir)%(Filename)%(Extension)"
+    />
     <!-- Include all Trino.Data.ADO source files recursively, excluding build artifacts and duplicate TaskUtilities -->
-    <Compile Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\**\*.cs" 
-             Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\obj\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\bin\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\TaskUtilities.cs"
-             Link="TrinoDataADO\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile
+      Include="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\**\*.cs"
+      Exclude="..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\obj\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\bin\**;..\..\lib\trino-csharp-client\trino-csharp\Trino.Data.ADO\Utilities\TaskUtilities.cs"
+      Link="TrinoDataADO\%(RecursiveDir)%(Filename)%(Extension)"
+    />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="1.1.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\S3Client\S3Client.csproj" />
   </ItemGroup>

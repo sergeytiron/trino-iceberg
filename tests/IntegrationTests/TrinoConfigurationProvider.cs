@@ -16,7 +16,7 @@ internal static class TrinoConfigurationProvider
             """u8.ToArray();
 
     public static byte[] GetNodePropertiesBytes() =>
-            """
+        """
             node.environment=dev
             node.id=trino-local
             node.data-dir=/data/trino

@@ -7,8 +7,4 @@ namespace S3Client.Models;
 /// <param name="Size">The size of the object in bytes.</param>
 /// <param name="LastModified">The date and time the object was last modified.</param>
 /// <param name="ETag">The entity tag (hash) of the object.</param>
-public record S3ObjectInfo(
-    string Key,
-    long Size,
-    DateTime LastModified,
-    string? ETag);
+public record S3ObjectInfo(string Key, long Size, DateTime LastModified, string? ETag);

@@ -68,7 +68,10 @@ public class TrinoClientIntegrationTests
 
         // Sequential aggregate style queries (sum + avg over ids >= 100)
         var sumRows = await ExecuteQueryAsync(session, "SELECT SUM(id) FROM shared_data WHERE id >= 100");
-        var avgRows = await ExecuteQueryAsync(session, "SELECT AVG(CAST(id AS DOUBLE)) FROM shared_data WHERE id >= 100");
+        var avgRows = await ExecuteQueryAsync(
+            session,
+            "SELECT AVG(CAST(id AS DOUBLE)) FROM shared_data WHERE id >= 100"
+        );
         Assert.Single(sumRows);
         Assert.Single(avgRows);
         Assert.Equal(300, Convert.ToInt64(sumRows[0][0]));
@@ -81,7 +84,10 @@ public class TrinoClientIntegrationTests
         var session = CreateSession(SchemaName);
 
         // Sales aggregate - using category_data
-        var salesAgg = await ExecuteQueryAsync(session, "SELECT category, SUM(amount) AS total FROM category_data GROUP BY category ORDER BY category");
+        var salesAgg = await ExecuteQueryAsync(
+            session,
+            "SELECT category, SUM(amount) AS total FROM category_data GROUP BY category ORDER BY category"
+        );
         Assert.Equal(2, salesAgg.Count);
         Assert.Equal("A", salesAgg[0][0]);
         Assert.Equal(250L, Convert.ToInt64(salesAgg[0][1]));
@@ -89,20 +95,29 @@ public class TrinoClientIntegrationTests
         Assert.Equal(500L, Convert.ToInt64(salesAgg[1][1]));
 
         // People simple types - using shared_data rows 1-3
-        var people = await ExecuteQueryAsync(session, "SELECT id, name, age, active FROM shared_data WHERE id <= 3 ORDER BY id");
+        var people = await ExecuteQueryAsync(
+            session,
+            "SELECT id, name, age, active FROM shared_data WHERE id <= 3 ORDER BY id"
+        );
         Assert.Equal(3, people.Count);
         Assert.Equal("Alice", people[0][1]);
         Assert.Equal(30, Convert.ToInt32(people[0][2]));
         Assert.True((bool)people[0][3]!);
 
         // Measurements numeric extremes + decimal - using shared_data row with id=100
-        var measurements = await ExecuteQueryAsync(session, "SELECT id, value_int, value_double, value_decimal FROM shared_data WHERE id = 100 ORDER BY id");
+        var measurements = await ExecuteQueryAsync(
+            session,
+            "SELECT id, value_int, value_double, value_decimal FROM shared_data WHERE id = 100 ORDER BY id"
+        );
         Assert.Single(measurements);
         Assert.Equal(9223372036854775807L, Convert.ToInt64(measurements[0][1]));
         Assert.True(Math.Abs(Convert.ToDouble(measurements[0][2]) - 3.14159) < 1e-5);
 
         // Messages string escaping - using shared_data row 2
-        var messages = await ExecuteQueryAsync(session, "SELECT id, content FROM shared_data WHERE content = 'It''s a test'");
+        var messages = await ExecuteQueryAsync(
+            session,
+            "SELECT id, content FROM shared_data WHERE content = 'It''s a test'"
+        );
         Assert.Single(messages);
         Assert.Equal("It's a test", messages[0][1]);
     }

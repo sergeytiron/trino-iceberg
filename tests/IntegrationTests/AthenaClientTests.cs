@@ -28,24 +28,36 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
 
         // People (simple types) - using shared_data with rows 1-3
-        var people = await client.QueryAsync<PersonDto>($"SELECT id, name, age, active FROM shared_data WHERE id <= 3 ORDER BY id", TestContext.Current.CancellationToken);
+        var people = await client.QueryAsync<PersonDto>(
+            $"SELECT id, name, age, active FROM shared_data WHERE id <= 3 ORDER BY id",
+            TestContext.Current.CancellationToken
+        );
         Assert.Equal(3, people.Count);
         Assert.True(people[0].Active);
         Assert.False(people[1].Active);
 
         // Contacts (null handling) - using shared_data with rows 1-3
-        var contacts = await client.QueryAsync<ContactDto>($"SELECT id, name, email, phone FROM shared_data WHERE id <= 3 ORDER BY id", TestContext.Current.CancellationToken);
+        var contacts = await client.QueryAsync<ContactDto>(
+            $"SELECT id, name, email, phone FROM shared_data WHERE id <= 3 ORDER BY id",
+            TestContext.Current.CancellationToken
+        );
         Assert.Equal(3, contacts.Count);
         Assert.Null(contacts[1].Email); // Bob email null
         Assert.Null(contacts[2].Phone); // Charlie phone null
 
         // Employees (snake_case mapping) - using employee_data
-        var employees = await client.QueryAsync<EmployeeDto>($"SELECT employee_id, first_name, last_name, hire_date FROM employee_data ORDER BY employee_id", TestContext.Current.CancellationToken);
+        var employees = await client.QueryAsync<EmployeeDto>(
+            $"SELECT employee_id, first_name, last_name, hire_date FROM employee_data ORDER BY employee_id",
+            TestContext.Current.CancellationToken
+        );
         Assert.Equal(2, employees.Count);
         Assert.Equal(1, employees[0].EmployeeId);
 
         // Empty result (id > 999)
-        var empty = await client.QueryAsync<PersonDto>($"SELECT id, name, age, active FROM shared_data WHERE id > 999", TestContext.Current.CancellationToken);
+        var empty = await client.QueryAsync<PersonDto>(
+            $"SELECT id, name, age, active FROM shared_data WHERE id > 999",
+            TestContext.Current.CancellationToken
+        );
         Assert.Empty(empty);
     }
 
@@ -55,20 +67,29 @@ public class AthenaClientTests
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName);
 
         // Measurements numeric - using shared_data row 4 (id=100)
-        var measurements = await client.QueryAsync<MeasurementDto>($"SELECT id, value_int, value_double, value_decimal FROM shared_data WHERE id = 100", TestContext.Current.CancellationToken);
+        var measurements = await client.QueryAsync<MeasurementDto>(
+            $"SELECT id, value_int, value_double, value_decimal FROM shared_data WHERE id = 100",
+            TestContext.Current.CancellationToken
+        );
         Assert.Single(measurements);
         Assert.Equal(9223372036854775807L, measurements[0].ValueInt);
         Assert.Equal(3.14159, measurements[0].ValueDouble, precision: 5);
         Assert.NotNull(measurements[0].ValueDecimal);
 
         // Messages escaping (parameterized string) - using shared_data row 2
-        var escaped = await client.QueryAsync<MessageDto>($"SELECT id, content FROM shared_data WHERE content = {"It's a test"}", TestContext.Current.CancellationToken);
+        var escaped = await client.QueryAsync<MessageDto>(
+            $"SELECT id, content FROM shared_data WHERE content = {"It's a test"}",
+            TestContext.Current.CancellationToken
+        );
         Assert.Single(escaped);
         Assert.Equal("It's a test", escaped[0].Content);
 
         // Parameterization (users) - using shared_data row 2
         var userId = 2;
-        var users = await client.QueryAsync<UserDto>($"SELECT id, username FROM shared_data WHERE id = {userId}", TestContext.Current.CancellationToken);
+        var users = await client.QueryAsync<UserDto>(
+            $"SELECT id, username FROM shared_data WHERE id = {userId}",
+            TestContext.Current.CancellationToken
+        );
         Assert.Single(users);
         Assert.Equal(2, users[0].Id);
         Assert.Equal("bob", users[0].Username);
@@ -81,12 +102,18 @@ public class AthenaClientTests
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: "warehouse");
+            bucketName: "warehouse"
+        );
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
         var exportPath = $"exports/sales_{Guid.NewGuid():N}";
         var category = "B";
-        var response = await client.UnloadAsync($"SELECT * FROM category_data WHERE category = {category}", "warehouse", exportPath, TestContext.Current.CancellationToken);
+        var response = await client.UnloadAsync(
+            $"SELECT * FROM category_data WHERE category = {category}",
+            "warehouse",
+            exportPath,
+            TestContext.Current.CancellationToken
+        );
         Assert.Equal(2, response.RowCount);
         Assert.Equal($"s3://warehouse/{exportPath}", response.S3AbsolutePath);
     }
@@ -99,7 +126,8 @@ public class AthenaClientTests
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: "warehouse");
+            bucketName: "warehouse"
+        );
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
         var exportPath = $"exports/unload_test_{Guid.NewGuid():N}";
@@ -109,7 +137,8 @@ public class AthenaClientTests
             $"SELECT id, name FROM shared_data WHERE id <= 3",
             "warehouse",
             exportPath,
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         // Assert - verify row count
         Assert.Equal(3, response.RowCount);
@@ -126,15 +155,18 @@ public class AthenaClientTests
 
         // Should have parquet files directly at the target path
         Assert.NotEmpty(files);
-        Assert.All(files, f =>
-        {
-            // Files should be directly under exportPath, not in data/ or metadata/ subfolders
-            Assert.StartsWith(exportPath + "/", f.Key);
-            Assert.DoesNotContain("/data/", f.Key);
-            Assert.DoesNotContain("/metadata/", f.Key);
-            // Should be parquet files
-            Assert.EndsWith(".parquet", f.Key);
-        });
+        Assert.All(
+            files,
+            f =>
+            {
+                // Files should be directly under exportPath, not in data/ or metadata/ subfolders
+                Assert.StartsWith(exportPath + "/", f.Key);
+                Assert.DoesNotContain("/data/", f.Key);
+                Assert.DoesNotContain("/metadata/", f.Key);
+                // Should be parquet files
+                Assert.EndsWith(".parquet", f.Key);
+            }
+        );
     }
 
     [Fact]
@@ -145,7 +177,8 @@ public class AthenaClientTests
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: "warehouse");
+            bucketName: "warehouse"
+        );
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
         var exportPath = $"exports/cleanup_test_{Guid.NewGuid():N}";
@@ -155,7 +188,8 @@ public class AthenaClientTests
             $"SELECT id, name FROM shared_data WHERE id = 1",
             "warehouse",
             exportPath,
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         // Assert - verify the operation succeeded
         Assert.Equal(1, response.RowCount);
@@ -186,7 +220,9 @@ public class AthenaClientTests
                 $"SELECT id FROM shared_data WHERE id = 1",
                 "warehouse",
                 exportPath,
-                TestContext.Current.CancellationToken));
+                TestContext.Current.CancellationToken
+            )
+        );
 
         Assert.Contains("S3 client is required", exception.Message);
         _output.WriteLine($"Expected exception: {exception.Message}");
@@ -200,7 +236,8 @@ public class AthenaClientTests
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: "warehouse");
+            bucketName: "warehouse"
+        );
 
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, s3Client);
         var exportPath = $"exports/multi_file_test_{Guid.NewGuid():N}";
@@ -210,7 +247,8 @@ public class AthenaClientTests
             $"SELECT * FROM shared_data",
             "warehouse",
             exportPath,
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         // Assert
         Assert.True(response.RowCount > 0, "Expected at least one row");
@@ -225,12 +263,15 @@ public class AthenaClientTests
 
         // All files should be parquet files directly at target path
         Assert.NotEmpty(files);
-        Assert.All(files, f =>
-        {
-            Assert.StartsWith(exportPath + "/", f.Key);
-            Assert.EndsWith(".parquet", f.Key);
-            Assert.True(f.Size > 0, "File should have content");
-        });
+        Assert.All(
+            files,
+            f =>
+            {
+                Assert.StartsWith(exportPath + "/", f.Key);
+                Assert.EndsWith(".parquet", f.Key);
+                Assert.True(f.Size > 0, "File should have content");
+            }
+        );
     }
 
     [Fact]
@@ -245,7 +286,8 @@ public class AthenaClientTests
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: exportBucketName);
+            bucketName: exportBucketName
+        );
 
         // Create AthenaClient with the export bucket's S3 client
         var client = new AthenaClient(new Uri(Stack.TrinoEndpoint), "iceberg", SchemaName, exportS3Client);
@@ -256,14 +298,18 @@ public class AthenaClientTests
             $"SELECT id, name FROM shared_data WHERE id <= 3",
             exportBucketName,
             exportPath,
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         // Assert - verify row count and path
         Assert.Equal(3, response.RowCount);
         Assert.Equal($"s3://{exportBucketName}/{exportPath}", response.S3AbsolutePath);
 
         // Assert - verify files exist in the export bucket
-        var filesInExportBucket = await exportS3Client.ListFilesAsync(exportPath, TestContext.Current.CancellationToken);
+        var filesInExportBucket = await exportS3Client.ListFilesAsync(
+            exportPath,
+            TestContext.Current.CancellationToken
+        );
 
         _output.WriteLine($"Files in bucket '{exportBucketName}' at '{exportPath}':");
         foreach (var file in filesInExportBucket)
@@ -272,21 +318,28 @@ public class AthenaClientTests
         }
 
         Assert.NotEmpty(filesInExportBucket);
-        Assert.All(filesInExportBucket, f =>
-        {
-            Assert.StartsWith(exportPath + "/", f.Key);
-            Assert.EndsWith(".parquet", f.Key);
-            Assert.True(f.Size > 0, "File should have content");
-        });
+        Assert.All(
+            filesInExportBucket,
+            f =>
+            {
+                Assert.StartsWith(exportPath + "/", f.Key);
+                Assert.EndsWith(".parquet", f.Key);
+                Assert.True(f.Size > 0, "File should have content");
+            }
+        );
 
         // Verify files are NOT in the warehouse bucket at the export path
         using var warehouseS3Client = new MinioS3Client(
             endpoint: new Uri(Stack.MinioEndpoint),
             accessKey: "minioadmin",
             secretKey: "minioadmin",
-            bucketName: "warehouse");
+            bucketName: "warehouse"
+        );
 
-        var filesInWarehouse = await warehouseS3Client.ListFilesAsync(exportPath, TestContext.Current.CancellationToken);
+        var filesInWarehouse = await warehouseS3Client.ListFilesAsync(
+            exportPath,
+            TestContext.Current.CancellationToken
+        );
         _output.WriteLine($"Files in 'warehouse' bucket at '{exportPath}': {filesInWarehouse.Count}");
         Assert.Empty(filesInWarehouse);
     }
@@ -332,7 +385,9 @@ public class AthenaClientTests
         // Ensure later snapshot rows are not present
         Assert.DoesNotContain(results, r => r.EventId == 3 || r.EventId == 4);
 
-        _output.WriteLine($"Time travel to {timeTravelInstant:O} returned {results.Count} rows; snapshot 2 rows excluded as expected.");
+        _output.WriteLine(
+            $"Time travel to {timeTravelInstant:O} returned {results.Count} rows; snapshot 2 rows excluded as expected."
+        );
     }
 
     #endregion

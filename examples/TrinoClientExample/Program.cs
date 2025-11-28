@@ -21,7 +21,7 @@ try
     {
         Server = new Uri(trinoEndpoint),
         Catalog = catalog,
-        Schema = schema
+        Schema = schema,
     };
 
     var session = new ClientSession(sessionProperties: sessionProperties, auth: null);
@@ -29,20 +29,29 @@ try
     // Example 1: Create a schema
     Console.WriteLine("📝 Example 1: Creating schema...");
     var schemaName = $"demo_{Guid.NewGuid():N}".ToLowerInvariant();
-    var createSchemaExec = await RecordExecutor.Execute(session, $"CREATE SCHEMA IF NOT EXISTS {catalog}.{schemaName} WITH (location='s3://warehouse/{schemaName}/')");
+    var createSchemaExec = await RecordExecutor.Execute(
+        session,
+        $"CREATE SCHEMA IF NOT EXISTS {catalog}.{schemaName} WITH (location='s3://warehouse/{schemaName}/')"
+    );
     // Consume the results to ensure query completes
     foreach (var _ in createSchemaExec) { }
     Console.WriteLine($"✅ Schema '{schemaName}' created\n");
 
     // Example 2: Create a table
     Console.WriteLine("📝 Example 2: Creating table...");
-    var createTableExec = await RecordExecutor.Execute(session, $"CREATE TABLE IF NOT EXISTS {catalog}.{schemaName}.numbers (id int, name varchar) WITH (format='PARQUET')");
+    var createTableExec = await RecordExecutor.Execute(
+        session,
+        $"CREATE TABLE IF NOT EXISTS {catalog}.{schemaName}.numbers (id int, name varchar) WITH (format='PARQUET')"
+    );
     foreach (var _ in createTableExec) { }
     Console.WriteLine("✅ Table 'numbers' created\n");
 
     // Example 3: Insert data
     Console.WriteLine("📝 Example 3: Inserting data...");
-    var insertExec = await RecordExecutor.Execute(session, $"INSERT INTO {catalog}.{schemaName}.numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')");
+    var insertExec = await RecordExecutor.Execute(
+        session,
+        $"INSERT INTO {catalog}.{schemaName}.numbers VALUES (1, 'one'), (2, 'two'), (3, 'three')"
+    );
     foreach (var _ in insertExec) { }
     Console.WriteLine("✅ Data inserted\n");
 
@@ -65,7 +74,10 @@ try
 
     // Example 5: Aggregate query
     Console.WriteLine("🔍 Example 5: Running aggregate query...");
-    var countExecutor = await RecordExecutor.Execute(session, $"SELECT COUNT(*) as total FROM {catalog}.{schemaName}.numbers");
+    var countExecutor = await RecordExecutor.Execute(
+        session,
+        $"SELECT COUNT(*) as total FROM {catalog}.{schemaName}.numbers"
+    );
     var countResults = new List<List<object>>();
     foreach (var row in countExecutor)
     {

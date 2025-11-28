@@ -1,0 +1,3 @@
+<!-- Stop MSBuild property inheritance from parent directories -->
+<Project>
+</Project>

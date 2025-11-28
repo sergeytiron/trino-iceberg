@@ -23,9 +23,7 @@ public class AthenaClient : IAthenaClient
     /// <param name="catalog">The default catalog to use.</param>
     /// <param name="schema">The default schema to use.</param>
     public AthenaClient(Uri trinoEndpoint, string catalog, string schema)
-        : this(trinoEndpoint, catalog, schema, null)
-    {
-    }
+        : this(trinoEndpoint, catalog, schema, null) { }
 
     /// <summary>
     /// Creates a new TrinoClient with the specified connection parameters and S3 client.
@@ -41,7 +39,7 @@ public class AthenaClient : IAthenaClient
             {
                 Server = trinoEndpoint,
                 Catalog = catalog,
-                Schema = schema
+                Schema = schema,
             },
             auth: null
         );
@@ -142,8 +140,7 @@ public class AthenaClient : IAthenaClient
         try
         {
             // Step 1: Create a temporary table with the query results in temp location
-            var createTableSql =
-                $"""
+            var createTableSql = $"""
                 CREATE TABLE {exportTableName}
                 WITH (location = '{absoluteTempPath}', format = 'PARQUET')
                 AS {sql}

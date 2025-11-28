@@ -27,9 +27,10 @@ public class SqlParameterFormatter
             // Check if this parameter is preceded by TIMESTAMP keyword
             var placeholder = $"{{{i}}}";
             var placeholderIndex = format.IndexOf(placeholder);
-            var precedingText = placeholderIndex > 10
-                ? format.Substring(placeholderIndex - 10, 10)
-                : format.Substring(0, placeholderIndex);
+            var precedingText =
+                placeholderIndex > 10
+                    ? format.Substring(placeholderIndex - 10, 10)
+                    : format.Substring(0, placeholderIndex);
             var followsTimestamp = precedingText.TrimEnd().EndsWith("TIMESTAMP", StringComparison.OrdinalIgnoreCase);
 
             inlinedArguments[i] = FormatSqlValue(arguments[i], followsTimestamp);
@@ -56,7 +57,7 @@ public class SqlParameterFormatter
             double d => d.ToString(CultureInfo.InvariantCulture),
             float f => f.ToString(CultureInfo.InvariantCulture),
             Guid g => $"'{g}'",
-            _ => value.ToString() ?? "NULL"
+            _ => value.ToString() ?? "NULL",
         };
     }
 }

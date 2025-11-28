@@ -32,7 +32,7 @@ public sealed class MinioS3Client : IS3Client
         {
             ServiceURL = endpoint.ToString(),
             ForcePathStyle = true, // Required for MinIO
-            UseHttp = endpoint.Scheme == "http"
+            UseHttp = endpoint.Scheme == "http",
         };
 
         _s3Client = new AmazonS3Client(accessKey, secretKey, config);
@@ -67,7 +67,7 @@ public sealed class MinioS3Client : IS3Client
         {
             BucketName = _bucketName,
             Key = key,
-            FilePath = localFilePath
+            FilePath = localFilePath,
         };
 
         await _s3Client.PutObjectAsync(request, cancellationToken);
@@ -79,11 +79,7 @@ public sealed class MinioS3Client : IS3Client
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(localFilePath);
 
-        var request = new GetObjectRequest
-        {
-            BucketName = _bucketName,
-            Key = key
-        };
+        var request = new GetObjectRequest { BucketName = _bucketName, Key = key };
 
         using var response = await _s3Client.GetObjectAsync(request, cancellationToken);
 
@@ -98,15 +94,14 @@ public sealed class MinioS3Client : IS3Client
     }
 
     /// <inheritdoc />
-    public async Task<List<S3ObjectInfo>> ListFilesAsync(string? prefix = null, CancellationToken cancellationToken = default)
+    public async Task<List<S3ObjectInfo>> ListFilesAsync(
+        string? prefix = null,
+        CancellationToken cancellationToken = default
+    )
     {
         var results = new List<S3ObjectInfo>();
 
-        var request = new ListObjectsV2Request
-        {
-            BucketName = _bucketName,
-            Prefix = prefix
-        };
+        var request = new ListObjectsV2Request { BucketName = _bucketName, Prefix = prefix };
 
         ListObjectsV2Response response;
         do
@@ -115,22 +110,23 @@ public sealed class MinioS3Client : IS3Client
 
             foreach (var obj in response.S3Objects)
             {
-                results.Add(new S3ObjectInfo(
-                    Key: obj.Key,
-                    Size: obj.Size,
-                    LastModified: obj.LastModified,
-                    ETag: obj.ETag));
+                results.Add(
+                    new S3ObjectInfo(Key: obj.Key, Size: obj.Size, LastModified: obj.LastModified, ETag: obj.ETag)
+                );
             }
 
             request.ContinuationToken = response.NextContinuationToken;
-        }
-        while (response.IsTruncated);
+        } while (response.IsTruncated);
 
         return results;
     }
 
     /// <inheritdoc />
-    public async Task CopyObjectAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken = default)
+    public async Task CopyObjectAsync(
+        string sourceKey,
+        string destinationKey,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationKey);
@@ -140,7 +136,7 @@ public sealed class MinioS3Client : IS3Client
             SourceBucket = _bucketName,
             SourceKey = sourceKey,
             DestinationBucket = _bucketName,
-            DestinationKey = destinationKey
+            DestinationKey = destinationKey,
         };
 
         await _s3Client.CopyObjectAsync(request, cancellationToken);
@@ -151,11 +147,7 @@ public sealed class MinioS3Client : IS3Client
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var request = new DeleteObjectRequest
-        {
-            BucketName = _bucketName,
-            Key = key
-        };
+        var request = new DeleteObjectRequest { BucketName = _bucketName, Key = key };
 
         await _s3Client.DeleteObjectAsync(request, cancellationToken);
     }
@@ -174,7 +166,7 @@ public sealed class MinioS3Client : IS3Client
         var request = new DeleteObjectsRequest
         {
             BucketName = _bucketName,
-            Objects = keysList.Select(k => new KeyVersion { Key = k }).ToList()
+            Objects = keysList.Select(k => new KeyVersion { Key = k }).ToList(),
         };
 
         await _s3Client.DeleteObjectsAsync(request, cancellationToken);

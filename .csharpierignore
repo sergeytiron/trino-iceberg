@@ -1,0 +1,6 @@
+# Ignore submodule
+lib/trino-csharp-client/
+
+# Ignore build outputs
+**/bin/
+**/obj/
