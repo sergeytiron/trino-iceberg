@@ -287,5 +287,74 @@ public class DapperIntegrationTests
         public double ValueDouble { get; set; }
     }
 
+    public class EventDto
+    {
+        public long EventId { get; set; }
+        public string EventType { get; set; } = string.Empty;
+        public DateTime EventTime { get; set; }
+    }
+
+    #endregion
+
+    #region Time Travel Tests
+
+    [Fact]
+    public async Task Dapper_Query_TimeTravelWithDateTimeParameters()
+    {
+        // Arrange - Insert initial data (Snapshot 1)
+        Stack.ExecuteNonQuery(
+            "INSERT INTO events_time_travel VALUES (101, 'dapper_login', TIMESTAMP '2025-11-17 10:00:00'), (102, 'dapper_click', TIMESTAMP '2025-11-17 10:05:00')",
+            SchemaName
+        );
+
+        // Ensure a distinct commit time boundary
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        var snapshotTime = DateTime.UtcNow; // capture point between commits
+
+        // Insert more data (Snapshot 2) - should not be visible when traveling to snapshotTime
+        Stack.ExecuteNonQuery(
+            "INSERT INTO events_time_travel VALUES (103, 'dapper_purchase', TIMESTAMP '2025-11-17 10:10:00'), (104, 'dapper_logout', TIMESTAMP '2025-11-17 10:15:00')",
+            SchemaName
+        );
+
+        using var connection = CreateConnection(SchemaName);
+        connection.Open();
+
+        // Format datetime values as Trino TIMESTAMP literals
+        // This is the edge case: using datetime for both snapshot time AND column filter
+        var snapshotTimeStr = snapshotTime.ToString("yyyy-MM-dd HH:mm:ss.fff");
+        var eventTimeFilter = new DateTime(2025, 11, 17, 10, 07, 00, DateTimeKind.Utc);
+        var eventTimeFilterStr = eventTimeFilter.ToString("yyyy-MM-dd HH:mm:ss.fff");
+
+        // Act - Time travel query with datetime parameters for both snapshot and filter
+        var sql = $"""
+            SELECT
+                event_id AS EventId,
+                event_type AS EventType,
+                event_time AS EventTime
+            FROM events_time_travel
+            FOR TIMESTAMP AS OF TIMESTAMP '{snapshotTimeStr}'
+            WHERE event_time < TIMESTAMP '{eventTimeFilterStr}'
+              AND event_id >= 101
+            ORDER BY event_id
+            """;
+
+        var results = connection.Query<EventDto>(sql).ToList();
+
+        // Assert - only snapshot 1 rows are visible, filtered by event_time
+        Assert.Equal(2, results.Count);
+        Assert.Equal(101, results[0].EventId);
+        Assert.Equal("dapper_login", results[0].EventType);
+        Assert.Equal(102, results[1].EventId);
+        Assert.Equal("dapper_click", results[1].EventType);
+
+        // Ensure later snapshot rows are not present
+        Assert.DoesNotContain(results, r => r.EventId == 103 || r.EventId == 104);
+
+        _output.WriteLine(
+            $"Dapper time travel to {snapshotTime:O} with event_time filter returned {results.Count} rows"
+        );
+    }
+
     #endregion
 }
