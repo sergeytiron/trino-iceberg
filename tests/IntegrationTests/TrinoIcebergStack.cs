@@ -21,8 +21,8 @@ public class TrinoIcebergStack : IAsyncDisposable
     private const string WarehouseBucketName = "warehouse";
 
     // Container image versions
-    private const string MinioImageVersion = "minio/minio:latest";
-    private const string NessieImageVersion = "ghcr.io/projectnessie/nessie:latest";
+    private const string MinioImageVersion = "minio/minio:RELEASE.2025-09-07T16-13-09Z";
+    private const string NessieImageVersion = "ghcr.io/projectnessie/nessie:0.105.7";
     private const string TrinoImageVersion = "trinodb/trino:478";
 
     private readonly INetwork _network;
