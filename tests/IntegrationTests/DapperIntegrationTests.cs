@@ -136,33 +136,33 @@ public class DapperIntegrationTests
         using var connection = CreateConnection(SchemaName);
         connection.Open();
 
-        // Using DefaultTypeMap.MatchNamesWithUnderscores for snake_case mapping
-        Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+        // Use SQL column aliases to map snake_case columns to PascalCase properties
+        // This is the recommended approach for Dapper as it avoids global state modification
+        // that could cause issues with parallel test execution
+        var employees = connection
+            .Query<EmployeeDto>(
+                """
+                SELECT
+                    employee_id AS EmployeeId,
+                    first_name AS FirstName,
+                    last_name AS LastName,
+                    hire_date AS HireDate
+                FROM employee_data
+                ORDER BY employee_id
+                """
+            )
+            .ToList();
 
-        try
-        {
-            var employees = connection
-                .Query<EmployeeDto>(
-                    "SELECT employee_id, first_name, last_name, hire_date FROM employee_data ORDER BY employee_id"
-                )
-                .ToList();
+        Assert.Equal(2, employees.Count);
+        Assert.Equal(1, employees[0].EmployeeId);
+        Assert.Equal("John", employees[0].FirstName);
+        Assert.Equal("Doe", employees[0].LastName);
 
-            Assert.Equal(2, employees.Count);
-            Assert.Equal(1, employees[0].EmployeeId);
-            Assert.Equal("John", employees[0].FirstName);
-            Assert.Equal("Doe", employees[0].LastName);
+        Assert.Equal(2, employees[1].EmployeeId);
+        Assert.Equal("Jane", employees[1].FirstName);
+        Assert.Equal("Smith", employees[1].LastName);
 
-            Assert.Equal(2, employees[1].EmployeeId);
-            Assert.Equal("Jane", employees[1].FirstName);
-            Assert.Equal("Smith", employees[1].LastName);
-
-            _output.WriteLine("Dapper correctly mapped snake_case columns to PascalCase properties");
-        }
-        finally
-        {
-            // Reset to avoid affecting other tests
-            Dapper.DefaultTypeMap.MatchNamesWithUnderscores = false;
-        }
+        _output.WriteLine("Dapper correctly mapped aliased columns to PascalCase properties");
     }
 
     [Fact]
@@ -224,26 +224,28 @@ public class DapperIntegrationTests
         using var connection = CreateConnection(SchemaName);
         connection.Open();
 
-        Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+        // Use SQL column aliases to map snake_case columns to PascalCase properties
+        // Note: TrinoBigDecimal is Trino's custom decimal type and doesn't map directly to System.Decimal
+        // To handle Trino decimals, implement a Dapper.SqlMapper.TypeHandler<decimal> that converts
+        // TrinoBigDecimal to System.Decimal, or use column aliases like: CAST(value_decimal AS DOUBLE)
+        var measurements = connection
+            .Query<MeasurementDto>(
+                """
+                SELECT
+                    id AS Id,
+                    value_int AS ValueInt,
+                    value_double AS ValueDouble
+                FROM shared_data
+                WHERE id = 100
+                """
+            )
+            .ToList();
 
-        try
-        {
-            // Note: TrinoBigDecimal is Trino's custom decimal type and doesn't map directly to System.Decimal
-            // For production use, you may need a custom type handler for decimal types
-            var measurements = connection
-                .Query<MeasurementDto>("SELECT id, value_int, value_double FROM shared_data WHERE id = 100")
-                .ToList();
+        Assert.Single(measurements);
+        Assert.Equal(9223372036854775807L, measurements[0].ValueInt);
+        Assert.Equal(3.14159, measurements[0].ValueDouble, precision: 5);
 
-            Assert.Single(measurements);
-            Assert.Equal(9223372036854775807L, measurements[0].ValueInt);
-            Assert.Equal(3.14159, measurements[0].ValueDouble, precision: 5);
-
-            _output.WriteLine("Dapper correctly handled numeric types including bigint and double");
-        }
-        finally
-        {
-            Dapper.DefaultTypeMap.MatchNamesWithUnderscores = false;
-        }
+        _output.WriteLine("Dapper correctly handled numeric types including bigint and double");
     }
 
     #region DTO Classes
