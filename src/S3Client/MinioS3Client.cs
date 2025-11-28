@@ -108,16 +108,19 @@ public sealed class MinioS3Client : IS3Client
         {
             response = await _s3Client.ListObjectsV2Async(request, cancellationToken);
 
-            foreach (var obj in response.S3Objects)
+            if (response.S3Objects is not null)
             {
-                results.Add(
-                    new S3ObjectInfo(
-                        Key: obj.Key,
-                        Size: obj.Size ?? 0,
-                        LastModified: obj.LastModified ?? DateTime.MinValue,
-                        ETag: obj.ETag
-                    )
-                );
+                foreach (var obj in response.S3Objects)
+                {
+                    results.Add(
+                        new S3ObjectInfo(
+                            Key: obj.Key,
+                            Size: obj.Size ?? 0,
+                            LastModified: obj.LastModified ?? DateTime.MinValue,
+                            ETag: obj.ETag
+                        )
+                    );
+                }
             }
 
             request.ContinuationToken = response.NextContinuationToken;
