@@ -145,12 +145,10 @@ public class TrinoIcebergStack : IAsyncDisposable
 
     /// <summary>
     /// Executes init scripts from Scripts/create and Scripts/insert folders (in that order).
-    /// Scripts are copied to the Trino container and executed via Trino CLI.
+    /// Uses ADO.NET client for faster execution (avoids JVM startup overhead of Trino CLI).
     /// </summary>
     private async Task ExecuteInitScriptsAsync(CancellationToken cancellationToken)
     {
-        const string containerScriptsDir = "/tmp/init-scripts";
-
         // Discover scripts from convention-based folders (create first, then insert)
         var scriptFolders = new[] { "Scripts/create", "Scripts/insert" };
         var scripts = scriptFolders
@@ -164,34 +162,101 @@ public class TrinoIcebergStack : IAsyncDisposable
             return;
         }
 
+        // Create a single connection for all scripts (avoids connection overhead)
+        var properties = new TrinoConnectionProperties { Server = new Uri(TrinoEndpoint), Catalog = "iceberg" };
+
+        using var connection = new TrinoConnection(properties);
+        connection.Open();
+
         foreach (var filePath in scripts)
         {
-            // Copy the SQL file to the Trino container
             var fileName = Path.GetFileName(filePath);
-            var containerScriptPath = $"{containerScriptsDir}/{fileName}";
+            var scriptContent = await File.ReadAllTextAsync(filePath, cancellationToken);
 
-            var scriptContent = await File.ReadAllBytesAsync(filePath, cancellationToken);
-            // 644 = Owner RW, Group R, Others R (0644 octal = 420 decimal)
-            const uint fileMode644 = 420;
-            await _trinoContainer.CopyAsync(scriptContent, containerScriptPath, fileMode644, ct: cancellationToken);
-            _logger?.Invoke($"Copied {fileName} to container at {containerScriptPath}");
+            // Parse SQL statements (split on semicolons, handle comments)
+            var statements = ParseSqlStatements(scriptContent);
 
-            // Execute the script using Trino CLI
-            var trinoCliCommand = $"trino --server localhost:{TrinoPort} --file {containerScriptPath}";
-            var result = await _trinoContainer.ExecAsync(["sh", "-c", trinoCliCommand], cancellationToken);
-
-            if (result.ExitCode != 0)
+            foreach (var sql in statements)
             {
-                throw new InvalidOperationException(
-                    $"Init script execution failed for {fileName} with exit code {result.ExitCode}.{Environment.NewLine}"
-                        + $"Command: {trinoCliCommand}{Environment.NewLine}"
-                        + $"Stdout: {result.Stdout}{Environment.NewLine}"
-                        + $"Stderr: {result.Stderr}"
-                );
+                if (string.IsNullOrWhiteSpace(sql))
+                    continue;
+
+                try
+                {
+                    using var command = new TrinoCommand(connection, sql);
+                    command.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Init script execution failed for {fileName}.{Environment.NewLine}"
+                            + $"Statement: {sql}{Environment.NewLine}"
+                            + $"Error: {ex.Message}",
+                        ex
+                    );
+                }
             }
 
             _logger?.Invoke($"Executed init script: {fileName}");
         }
+    }
+
+    /// <summary>
+    /// Parses SQL content into individual statements, handling comments and multi-line statements.
+    /// Note: This is a simple parser for init scripts - it handles line comments but not
+    /// complex cases like '--' within string literals (which our init scripts don't contain).
+    /// </summary>
+    private static List<string> ParseSqlStatements(string content)
+    {
+        var statements = new List<string>();
+        var currentStatement = new System.Text.StringBuilder();
+
+        // Normalize line endings and split
+        var lines = content.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+
+            // Skip empty lines and full-line comments
+            if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("--"))
+                continue;
+
+            // Handle inline comments at end of line (simplified - doesn't handle -- in strings)
+            // Our init scripts don't contain values with -- so this is safe
+            var commentIndex = trimmedLine.IndexOf("--", StringComparison.Ordinal);
+            var effectiveLine = commentIndex >= 0 ? trimmedLine[..commentIndex].Trim() : trimmedLine;
+
+            if (string.IsNullOrWhiteSpace(effectiveLine))
+                continue;
+
+            currentStatement.Append(effectiveLine);
+
+            // Check if statement ends with semicolon
+            if (effectiveLine.EndsWith(';'))
+            {
+                // Remove trailing semicolon and add statement
+                var statement = currentStatement.ToString().TrimEnd(';').Trim();
+                if (!string.IsNullOrWhiteSpace(statement))
+                {
+                    statements.Add(statement);
+                }
+                currentStatement.Clear();
+            }
+            else
+            {
+                currentStatement.Append(' ');
+            }
+        }
+
+        // Add any remaining statement (without trailing semicolon)
+        var remaining = currentStatement.ToString().Trim();
+        if (!string.IsNullOrWhiteSpace(remaining))
+        {
+            statements.Add(remaining);
+        }
+
+        return statements;
     }
 
     /// <summary>
