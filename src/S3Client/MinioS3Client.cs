@@ -111,12 +111,17 @@ public sealed class MinioS3Client : IS3Client
             foreach (var obj in response.S3Objects)
             {
                 results.Add(
-                    new S3ObjectInfo(Key: obj.Key, Size: obj.Size, LastModified: obj.LastModified, ETag: obj.ETag)
+                    new S3ObjectInfo(
+                        Key: obj.Key,
+                        Size: obj.Size ?? 0,
+                        LastModified: obj.LastModified ?? DateTime.MinValue,
+                        ETag: obj.ETag
+                    )
                 );
             }
 
             request.ContinuationToken = response.NextContinuationToken;
-        } while (response.IsTruncated);
+        } while (response.IsTruncated == true);
 
         return results;
     }

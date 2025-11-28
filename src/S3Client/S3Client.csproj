@@ -5,6 +5,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="3.7.410" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.13.1" />
   </ItemGroup>
 </Project>

@@ -170,11 +170,10 @@ public class TrinoIcebergStack : IAsyncDisposable
             var containerScriptPath = $"{containerScriptsDir}/{fileName}";
 
             var scriptContent = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
-            // 644 = Owner RW, Group R, Others R
-            const UnixFileModes fileMode644 =
-                UnixFileModes.UserRead | UnixFileModes.UserWrite | UnixFileModes.GroupRead | UnixFileModes.OtherRead;
+            // 644 = Owner RW, Group R, Others R (0644 octal = 420 decimal)
+            const uint fileMode644 = 420;
             await _trinoContainer
-                .CopyAsync(scriptContent, containerScriptPath, fileMode644, cancellationToken)
+                .CopyAsync(scriptContent, containerScriptPath, fileMode644, ct: cancellationToken)
                 .ConfigureAwait(false);
             _logger?.Invoke($"Copied {fileName} to container at {containerScriptPath}");
 
