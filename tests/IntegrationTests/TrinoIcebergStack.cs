@@ -123,23 +123,24 @@ public class TrinoIcebergStack : IAsyncDisposable
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         // Start network
-        await _network.CreateAsync(cancellationToken).ConfigureAwait(false);
+        await _network.CreateAsync(cancellationToken);
 
         // Start MinIO and Nessie in parallel - they don't depend on each other
         await Task.WhenAll(
-                _minioContainer.StartAsync(cancellationToken),
-                _nessieContainer.StartAsync(cancellationToken)
-            )
-            .ConfigureAwait(false);
+            _minioContainer.StartAsync(cancellationToken),
+            _nessieContainer.StartAsync(cancellationToken)
+        );
 
         // Initialize MinIO bucket and start Trino in parallel
         // Trino JVM startup takes ~30s and doesn't need the bucket until first query
         // Bucket init is fast (~2s) and will complete before Trino is ready to query
-        await Task.WhenAll(InitializeMinIOBucketAsync(cancellationToken), _trinoContainer.StartAsync(cancellationToken))
-            .ConfigureAwait(false);
+        await Task.WhenAll(
+            InitializeMinIOBucketAsync(cancellationToken),
+            _trinoContainer.StartAsync(cancellationToken)
+        );
 
         // Execute init scripts after Trino is ready (auto-discovered from Scripts/create and Scripts/insert)
-        await ExecuteInitScriptsAsync(cancellationToken).ConfigureAwait(false);
+        await ExecuteInitScriptsAsync(cancellationToken);
     }
 
     /// <summary>
@@ -169,19 +170,15 @@ public class TrinoIcebergStack : IAsyncDisposable
             var fileName = Path.GetFileName(filePath);
             var containerScriptPath = $"{containerScriptsDir}/{fileName}";
 
-            var scriptContent = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+            var scriptContent = await File.ReadAllBytesAsync(filePath, cancellationToken);
             // 644 = Owner RW, Group R, Others R (0644 octal = 420 decimal)
             const uint fileMode644 = 420;
-            await _trinoContainer
-                .CopyAsync(scriptContent, containerScriptPath, fileMode644, ct: cancellationToken)
-                .ConfigureAwait(false);
+            await _trinoContainer.CopyAsync(scriptContent, containerScriptPath, fileMode644, ct: cancellationToken);
             _logger?.Invoke($"Copied {fileName} to container at {containerScriptPath}");
 
             // Execute the script using Trino CLI
             var trinoCliCommand = $"trino --server localhost:{TrinoPort} --file {containerScriptPath}";
-            var result = await _trinoContainer
-                .ExecAsync(["sh", "-c", trinoCliCommand], cancellationToken)
-                .ConfigureAwait(false);
+            var result = await _trinoContainer.ExecAsync(["sh", "-c", trinoCliCommand], cancellationToken);
 
             if (result.ExitCode != 0)
             {
@@ -267,9 +264,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         var createBucketCommand =
             $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{bucketName} || true";
 
-        var createBucketResult = await _minioContainer
-            .ExecAsync(["sh", "-c", createBucketCommand], cancellationToken)
-            .ConfigureAwait(false);
+        var createBucketResult = await _minioContainer.ExecAsync(["sh", "-c", createBucketCommand], cancellationToken);
 
         if (createBucketResult.ExitCode != 0)
         {
@@ -287,17 +282,17 @@ public class TrinoIcebergStack : IAsyncDisposable
     {
         // Dispose in reverse order of startup
         // Continue cleanup even if individual disposals fail
-        await DisposeContainerAsync(_trinoContainer, "Trino").ConfigureAwait(false);
-        await DisposeContainerAsync(_nessieContainer, "Nessie").ConfigureAwait(false);
-        await DisposeContainerAsync(_minioContainer, "MinIO").ConfigureAwait(false);
-        await DisposeNetworkAsync().ConfigureAwait(false);
+        await DisposeContainerAsync(_trinoContainer, "Trino");
+        await DisposeContainerAsync(_nessieContainer, "Nessie");
+        await DisposeContainerAsync(_minioContainer, "MinIO");
+        await DisposeNetworkAsync();
     }
 
     private async Task DisposeContainerAsync(IContainer container, string name)
     {
         try
         {
-            await container.DisposeAsync().ConfigureAwait(false);
+            await container.DisposeAsync();
             _logger?.Invoke($"{name} container disposed successfully");
         }
         catch (Exception ex)
@@ -312,7 +307,7 @@ public class TrinoIcebergStack : IAsyncDisposable
     {
         try
         {
-            await _network.DisposeAsync().ConfigureAwait(false);
+            await _network.DisposeAsync();
             _logger?.Invoke("Network disposed successfully");
         }
         catch (Exception ex)
@@ -328,9 +323,7 @@ public class TrinoIcebergStack : IAsyncDisposable
         var createBucketCommand =
             $"mc alias set local http://localhost:{MinioS3Port} {MinioRootUser} {MinioRootPassword} && mc mb -p local/{WarehouseBucketName} || true";
 
-        var createBucketResult = await _minioContainer
-            .ExecAsync(["sh", "-c", createBucketCommand], cancellationToken)
-            .ConfigureAwait(false);
+        var createBucketResult = await _minioContainer.ExecAsync(["sh", "-c", createBucketCommand], cancellationToken);
 
         if (createBucketResult.ExitCode != 0)
         {
