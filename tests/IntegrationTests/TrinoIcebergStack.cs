@@ -32,10 +32,12 @@ public class TrinoIcebergStack : IAsyncDisposable
     private readonly Action<string>? _logger;
 
     /// <summary>Gets the MinIO S3 API endpoint URL</summary>
-    public string MinioEndpoint => $"http://localhost:{_minioContainer.GetMappedPublicPort(MinioS3Port)}";
+    /// <remarks>Uses 127.0.0.1 instead of localhost to avoid IPv6 resolution timeout on Windows (~21s delay)</remarks>
+    public string MinioEndpoint => $"http://127.0.0.1:{_minioContainer.GetMappedPublicPort(MinioS3Port)}";
 
     /// <summary>Gets the Trino query engine endpoint URL</summary>
-    public string TrinoEndpoint => $"http://localhost:{_trinoContainer.GetMappedPublicPort(TrinoPort)}";
+    /// <remarks>Uses 127.0.0.1 instead of localhost to avoid IPv6 resolution timeout on Windows (~21s delay)</remarks>
+    public string TrinoEndpoint => $"http://127.0.0.1:{_trinoContainer.GetMappedPublicPort(TrinoPort)}";
 
     /// <summary>
     /// Initializes a new instance of the Trino + Nessie + MinIO stack.
