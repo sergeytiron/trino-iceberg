@@ -19,5 +19,18 @@ jobs:
       with:
         submodules: recursive
     
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+    
+    - name: Restore dependencies
+      run: dotnet restore TrinoIcebergTests.slnx
+    
+    - name: Build
+      run: dotnet build TrinoIcebergTests.slnx --no-restore
+    
     - name: Test
-      run: dotnet test TrinoIcebergTests.slnx
+      run: dotnet test TrinoIcebergTests.slnx --no-build --verbosity normal
